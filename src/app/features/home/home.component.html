@@ -1,0 +1,223 @@
+<!-- ═══ HERO ══════════════════════════════════════════════════ -->
+<section class="hero-section">
+  <div class="hero-bg">
+    <div class="blob-1"></div>
+    <div class="blob-2"></div>
+    <div class="blob-3"></div>
+  </div>
+
+  <div class="container hero-content">
+    <div class="hero-left animate-fadeInUp">
+      <div class="hero-badge animate-fadeIn">
+        <span class="pulse-dot"></span>
+        <span>🚀 Free delivery on first order</span>
+      </div>
+
+      <h1 class="hero-title">
+        Craving something<br>
+        <span class="gradient-text">delicious?</span> 🍴
+      </h1>
+      <p class="hero-subtitle">
+        Discover restaurants nearby, browse menus, and get your favourite food delivered in minutes. 
+        Fresh, fast, and always satisfying.
+      </p>
+
+      <!-- Search Bar -->
+      <div class="search-bar hero-search">
+        <span class="search-icon">🔍</span>
+        <input
+          type="text"
+          placeholder="Search for restaurants or cuisines..."
+          [(ngModel)]="searchQuery"
+          (keyup.enter)="search()"
+        >
+        <button class="btn btn-primary btn-sm btn-search" (click)="search()">Search</button>
+      </div>
+
+      <!-- Quick Tags -->
+      <div class="quick-tags animate-fadeInUp delay-200">
+        <span class="text-sm text-muted">Popular:</span>
+        <span *ngFor="let t of ['Pizza','Biryani','Sushi','Burgers']"
+              class="quick-tag" (click)="browseCuisine(t)">{{ t }}</span>
+      </div>
+    </div>
+
+    <div class="hero-right animate-fadeIn delay-300">
+      <div class="hero-visual">
+        <div class="hero-img-wrapper animate-float">
+          <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600&q=85"
+               alt="Vegetarian food platter" class="hero-main-img">
+          <!-- Floating cards -->
+          <div class="float-card float-card-1 animate-slideInLeft delay-400">
+            <span class="fc-icon">⚡</span>
+            <div>
+              <div class="fc-title">Fast Delivery</div>
+              <div class="fc-sub">Avg 28 min</div>
+            </div>
+          </div>
+          <div class="float-card float-card-2 animate-slideInLeft delay-500">
+            <span class="fc-icon">⭐</span>
+            <div>
+              <div class="fc-title">Top Rated</div>
+              <div class="fc-sub">500+ restaurants</div>
+            </div>
+          </div>
+          <div class="float-card float-card-3 animate-fadeInUp delay-500">
+            <span>🛵</span>
+            <span class="fc-title">On the way!</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ STATS ════════════════════════════════════════════════ -->
+<section class="stats-section">
+  <div class="container">
+    <div class="stats-grid">
+      <div *ngFor="let s of stats; let i = index"
+           class="stat-item animate-fadeInUp" [style.animation-delay]="(i*100)+'ms'">
+        <div class="stat-icon-big">{{ s.icon }}</div>
+        <div class="stat-value-big">{{ s.value }}</div>
+        <div class="stat-label-text">{{ s.label }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CUISINES ═══════════════════════════════════════════════ -->
+<section class="section cuisines-section">
+  <div class="container">
+    <div class="section-header">
+      <h2 class="section-title">What are you <span class="gradient-text">craving?</span></h2>
+      <p class="section-subtitle">Browse by your favourite cuisine type</p>
+    </div>
+
+    <div class="cuisines-grid">
+      <div *ngFor="let c of cuisines; let i = index"
+           class="cuisine-card animate-scaleIn" [style.animation-delay]="(i*50)+'ms'"
+           (click)="browseCuisine(c.name)">
+        <div class="cuisine-icon">{{ c.icon }}</div>
+        <div class="cuisine-name">{{ c.name }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FEATURED RESTAURANTS ═══════════════════════════════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-header flex justify-between items-center flex-wrap gap-md">
+      <div>
+        <h2 class="section-title">Featured <span class="gradient-text">Restaurants</span></h2>
+        <p class="section-subtitle">Handpicked favourites with fast delivery</p>
+      </div>
+      <a routerLink="/restaurants" class="btn btn-secondary">View All →</a>
+    </div>
+
+    <!-- Skeleton -->
+    <div *ngIf="loading" class="grid grid-auto">
+      <div *ngFor="let _ of [1,2,3,4,5,6]" class="card" style="height:300px">
+        <div class="skeleton" style="height:180px;border-radius:0"></div>
+        <div class="card-body">
+          <div class="skeleton" style="height:20px;width:70%;margin-bottom:8px;border-radius:4px"></div>
+          <div class="skeleton" style="height:14px;width:90%;border-radius:4px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="!loading && errorMessage" class="empty-state" style="margin-top:24px">
+      <div class="empty-icon">🍽️</div>
+      <div class="empty-title">Restaurants unavailable</div>
+      <div class="empty-desc">{{ errorMessage }}</div>
+    </div>
+
+    <!-- Restaurants Grid -->
+    <div *ngIf="!loading && !errorMessage && featuredRestaurants.length" class="grid grid-auto">
+      <div *ngFor="let r of featuredRestaurants; let i = index"
+           class="restaurant-card animate-fadeInUp" [style.animation-delay]="(i*80)+'ms'"
+           [routerLink]="['/restaurants', r.restaurantId]">
+
+        <div class="card-image">
+          <img [src]="r.imageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=70'"
+               [alt]="r.name" class="cover">
+          <div class="offer-badge" *ngIf="r.avgRating > 4.5">⭐ Top Rated</div>
+          <div class="closed-overlay" *ngIf="!r.isOpen">
+            <span>🔴 Currently Closed</span>
+          </div>
+        </div>
+
+        <div class="card-content">
+          <div class="flex justify-between items-center">
+            <h3 class="restaurant-name">{{ r.name }}</h3>
+            <div class="rating-pill">
+              <span>⭐</span>
+              <span>{{ r.avgRating | number:'1.1-1' }}</span>
+            </div>
+          </div>
+
+          <p class="cuisine-tag">{{ r.cuisine }}</p>
+
+          <div class="restaurant-meta">
+            <span>⏱️ {{ r.estimatedDeliveryMin }} min</span>
+            <span class="meta-divider">·</span>
+            <span>₹{{ r.minOrderAmount }} min</span>
+            <span class="meta-divider">·</span>
+            <span>{{ r.city }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="!loading && !errorMessage && !featuredRestaurants.length" class="empty-state" style="margin-top:24px">
+      <div class="empty-icon">🍽️</div>
+      <div class="empty-title">No restaurants found</div>
+      <div class="empty-desc">There are no approved restaurants available yet.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ HOW IT WORKS ════════════════════════════════════════════ -->
+<section class="section how-section">
+  <div class="container">
+    <div class="section-header text-center">
+      <h2 class="section-title">How it <span class="gradient-text">works</span></h2>
+      <p class="section-subtitle">Get your food in 4 simple steps</p>
+    </div>
+
+    <div class="how-grid">
+      <div *ngFor="let s of howItWorks; let i = index"
+           class="how-card animate-fadeInUp" [style.animation-delay]="(i*100)+'ms'">
+        <div class="how-step">{{ s.step }}</div>
+        <div class="how-icon">{{ s.icon }}</div>
+        <h4>{{ s.title }}</h4>
+        <p>{{ s.desc }}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CTA BANNER ══════════════════════════════════════════════ -->
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-card">
+      <div class="cta-content animate-fadeInUp">
+        <h2>Ready to order? 🎉</h2>
+        <p>Join 50,000+ happy customers. Sign up and get ₹100 off your first order!</p>
+        <div class="cta-btns">
+          <a *ngIf="!auth.isLoggedIn" routerLink="/register" class="btn btn-primary btn-lg">
+            🚀 Get Started Free
+          </a>
+          <a routerLink="/restaurants" class="btn btn-secondary btn-lg">Browse Restaurants</a>
+        </div>
+      </div>
+      <div class="cta-emoji-cluster">
+        <span class="animate-float">🍕</span>
+        <span class="animate-float delay-200">🍔</span>
+        <span class="animate-float delay-400">🍣</span>
+        <span class="animate-float delay-100">🌮</span>
+      </div>
+    </div>
+  </div>
+</section>

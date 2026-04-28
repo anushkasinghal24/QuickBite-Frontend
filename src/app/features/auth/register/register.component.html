@@ -1,0 +1,111 @@
+<div class="auth-page">
+  <div class="auth-left">
+    <div class="auth-left-content">
+      <div class="brand-logo">
+        <span>🍕</span>
+        <span class="logo-text">Quick<span class="gradient-text">Bite</span></span>
+      </div>
+      <h2 class="auth-left-title">Join the<br>food revolution.</h2>
+      <p>Whether you're a food lover, restaurant owner or delivery agent — QuickBite has a place for you.</p>
+      <div class="auth-features">
+        <div class="af-item"><span>🎁</span> ₹100 off your first order</div>
+        <div class="af-item"><span>🚀</span> Instant account setup</div>
+        <div class="af-item"><span>🔒</span> Secure & private</div>
+      </div>
+      <div class="food-illustration">🥘 🍱 🥗 🍩 🧁</div>
+    </div>
+  </div>
+
+  <div class="auth-right">
+    <div class="auth-form-wrapper animate-fadeInUp">
+      <h1 class="auth-title">Create account ✨</h1>
+      <p class="auth-subtitle">Start your QuickBite journey today</p>
+
+      <!-- Role Selector -->
+      <div class="form-group">
+        <label class="form-label">I am a...</label>
+        <div class="role-grid">
+          <div *ngFor="let r of roles"
+               class="role-card" [class.selected]="selectedRole === r.id"
+               (click)="selectRole(r.id)">
+            <div class="role-icon">{{ r.icon }}</div>
+            <div class="role-name">{{ r.name }}</div>
+          </div>
+        </div>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="submit()" class="auth-form" novalidate>
+
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <div class="input-wrapper">
+            <span class="input-icon">👤</span>
+            <input formControlName="fullName" type="text" class="form-control with-icon"
+                   placeholder="Your full name"
+                   [class.error]="fullName.invalid && fullName.touched">
+          </div>
+          <span class="form-error" *ngIf="fullName.invalid && fullName.touched">
+            {{ fullName.hasError('required') ? 'Name is required' : 'Minimum 2 characters' }}
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <div class="input-wrapper">
+            <span class="input-icon">📧</span>
+            <input formControlName="email" type="email" class="form-control with-icon"
+                   placeholder="you@example.com"
+                   [class.error]="email.invalid && email.touched">
+          </div>
+          <span class="form-error" *ngIf="email.invalid && email.touched">
+            {{ email.hasError('required') ? 'Email is required' : 'Invalid email' }}
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Phone Number</label>
+          <div class="input-wrapper">
+            <span class="input-icon">📱</span>
+            <input formControlName="phone" type="tel" class="form-control with-icon"
+                   placeholder="10-digit mobile number"
+                   [class.error]="phone.invalid && phone.touched">
+          </div>
+          <span class="form-error" *ngIf="phone.invalid && phone.touched">
+            Enter a valid 10-digit Indian mobile number
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <div class="input-wrapper">
+            <span class="input-icon">🔒</span>
+            <input formControlName="password" [type]="showPass ? 'text' : 'password'"
+                   class="form-control with-icon with-icon-right"
+                   placeholder="Min 6 characters"
+                   [class.error]="password.invalid && password.touched">
+            <button type="button" class="pass-toggle" (click)="showPass = !showPass">
+              {{ showPass ? '🙈' : '👁️' }}
+            </button>
+          </div>
+          <span class="form-error" *ngIf="password.invalid && password.touched">
+            {{ password.hasError('required') ? 'Password is required' : 'Minimum 6 characters' }}
+          </span>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg w-full" [disabled]="loading">
+          <span *ngIf="!loading">Create Account 🚀</span>
+          <span *ngIf="loading" class="spinner" style="width:20px;height:20px;border-width:2px"></span>
+        </button>
+
+      </form>
+
+      <p class="auth-switch">
+        Already have an account? <a routerLink="/login">Sign in →</a>
+      </p>
+
+      <p class="terms-note">
+        By registering, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+      </p>
+    </div>
+  </div>
+</div>
