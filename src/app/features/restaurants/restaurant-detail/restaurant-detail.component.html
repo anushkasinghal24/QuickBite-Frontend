@@ -27,7 +27,7 @@
     <div class="rest-hero-meta">
       <span class="meta-chip">⭐ {{ restaurant.avgRating | number:'1.1-1' }} rating</span>
       <span class="meta-chip">⏱ {{ restaurant.estimatedDeliveryMin }} min delivery</span>
-      <span class="meta-chip">₹{{ restaurant.minOrderAmount }} min order</span>
+      <span class="meta-chip">₹{{ restaurant.costForTwo ?? restaurant.minOrderAmount }} cost for two</span>
       <span class="meta-chip">📍 {{ restaurant.city }}</span>
     </div>
   </div>
@@ -164,6 +164,7 @@
         <div class="info-item"><span class="info-icon">🍽️</span><div><strong>Cuisine</strong><p>{{ restaurant.cuisine }}</p></div></div>
         <div class="info-item"><span class="info-icon">⏱️</span><div><strong>Delivery Time</strong><p>{{ restaurant.estimatedDeliveryMin }} minutes</p></div></div>
         <div class="info-item"><span class="info-icon">💰</span><div><strong>Min Order</strong><p>₹{{ restaurant.minOrderAmount }}</p></div></div>
+        <div class="info-item"><span class="info-icon">👥</span><div><strong>Cost for Two</strong><p>₹{{ restaurant.costForTwo ?? restaurant.minOrderAmount }}</p></div></div>
         <div class="info-item"><span class="info-icon">📏</span><div><strong>Delivery Radius</strong><p>{{ restaurant.deliveryRadius }} km</p></div></div>
       </div>
     </div>
@@ -178,7 +179,7 @@
       <ng-container *ngIf="cart && cart.items.length; else emptyCart">
         <div class="cart-items-list">
           <div *ngFor="let item of cart.items" class="cart-sidebar-item">
-            <span class="cs-item-name">{{ item.name }}</span>
+            <span class="cs-item-name">{{ item.name || ('Item #' + item.menuItemId) }}</span>
             <span class="cs-item-qty">× {{ item.quantity }}</span>
             <span class="cs-item-price">₹{{ item.price * item.quantity }}</span>
           </div>
@@ -199,8 +200,8 @@
           <span style="font-size:2.5rem">🛒</span>
           <p>Add items to get started!</p>
         </div>
-        <div class="min-order-hint" *ngIf="restaurant.minOrderAmount">
-          <span>📝</span> Min order: ₹{{ restaurant.minOrderAmount }}
+        <div class="min-order-hint" *ngIf="restaurant.costForTwo != null">
+          <span>📝</span> Cost for two: ₹{{ restaurant.costForTwo }}
         </div>
       </ng-template>
     </div>

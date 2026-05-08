@@ -77,7 +77,11 @@ export class AuthService {
   }
 
   changePassword(oldPass: string, newPass: string): Observable<void> {
-    return this.http.post<ApiResponse<void>>(`${this.apiUrl}/password`, { oldPassword: oldPass, newPassword: newPass }).pipe(
+    return this.http.put<ApiResponse<void>>(`${this.apiUrl}/password`, {
+      currentPassword: oldPass,
+      newPassword: newPass,
+      confirmNewPassword: newPass
+    }).pipe(
       map(() => undefined)
     );
   }
@@ -107,12 +111,6 @@ export class AuthService {
   reactivateUser(userId: number): Observable<void> {
     return this.http.put<ApiResponse<void>>(`${this.apiUrl}/admin/users/${userId}/reactivate`, {}).pipe(
       map(() => undefined)
-    );
-  }
-
-  updateUserRole(userId: number, role: User['role']): Observable<User> {
-    return this.http.put<ApiResponse<User>>(`${this.apiUrl}/admin/users/${userId}/role`, { role }).pipe(
-      map(response => response.data!)
     );
   }
 

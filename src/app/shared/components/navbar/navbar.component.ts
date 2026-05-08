@@ -1,12 +1,14 @@
 import { Component, HostListener, OnInit, OnDestroy } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { Subscription } from 'rxjs';
+import { Subscription, interval, of } from 'rxjs';
+import { catchError, startWith, switchMap } from 'rxjs/operators';
 import { AuthService } from '../../../core/services/auth.service';
 import { ThemeService } from '../../../core/services/ui.services';
 import { CartStateService } from '../../../core/services/ui.services';
 import { NotificationService } from '../../../core/services/api.services';
 import { User } from '../../../core/models';
+import { ToastService } from '../../../core/services/ui.services';
 
 @Component({
   selector: 'app-navbar',
@@ -22,12 +24,15 @@ export class NavbarComponent implements OnInit, OnDestroy {
   isScrolled = false;
   mobileMenuOpen = false;
   private subs = new Subscription();
+  private notifPollSub = new Subscription();
+  private lastUnreadCount = 0;
 
   constructor(
     public auth: AuthService,
     public theme: ThemeService,
     private cartState: CartStateService,
     private notifService: NotificationService,
+    private toast: ToastService,
     private router: Router
   ) {}
 
@@ -35,9 +40,11 @@ export class NavbarComponent implements OnInit, OnDestroy {
     this.subs.add(this.auth.currentUser$.subscribe(u => {
       this.user = u;
       if (u && this.auth.isLoggedIn) {
-        this.loadNotifCount(u.userId);
+        this.startNotificationPolling(u.userId);
       } else {
         this.unreadNotifs = 0;
+        this.lastUnreadCount = 0;
+        this.stopNotificationPolling();
       }
     }));
     this.subs.add(this.cartState.items$.subscribe(() => {
@@ -63,10 +70,62 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
   private loadNotifCount(userId: number) {
     this.notifService.getUnreadCount(userId).subscribe({
-      next: n => this.unreadNotifs = n,
+      next: n => {
+        if (n > this.lastUnreadCount && !this.router.url.startsWith('/owner')) {
+          this.toast.info('You have a new notification');
+          this.playNotifyTone();
+        }
+        this.lastUnreadCount = n;
+        this.unreadNotifs = n;
+      },
       error: () => {}
     });
   }
 
-  ngOnDestroy() { this.subs.unsubscribe(); }
+  private startNotificationPolling(userId: number) {
+    this.stopNotificationPolling();
+    this.notifPollSub = interval(30000).pipe(
+      startWith(0),
+      switchMap(() => this.notifService.getUnreadCount(userId).pipe(catchError(() => of(this.unreadNotifs))))
+    ).subscribe(count => {
+      if (count > this.lastUnreadCount && !this.router.url.startsWith('/owner')) {
+        this.toast.info('You have a new notification');
+        this.playNotifyTone();
+      }
+      this.lastUnreadCount = count;
+      this.unreadNotifs = count;
+    });
+  }
+
+  private stopNotificationPolling() {
+    this.notifPollSub.unsubscribe();
+    this.notifPollSub = new Subscription();
+  }
+
+  private playNotifyTone() {
+    try {
+      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextCtor) return;
+      const ctx = new AudioContextCtor();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 880;
+      gain.gain.value = 0.04;
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      window.setTimeout(() => {
+        oscillator.stop();
+        ctx.close().catch(() => {});
+      }, 180);
+    } catch {
+      // Best-effort only; browsers may block audio until user interacts.
+    }
+  }
+
+  ngOnDestroy() {
+    this.subs.unsubscribe();
+    this.stopNotificationPolling();
+  }
 }

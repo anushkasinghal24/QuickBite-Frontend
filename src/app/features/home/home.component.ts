@@ -16,6 +16,7 @@ import { Restaurant } from '../../core/models';
 })
 export class HomeComponent implements OnInit {
   searchQuery = '';
+  nearbyRadius = 10;
   featuredRestaurants: Restaurant[] = [];
   loading = true;
   errorMessage = '';
@@ -78,6 +79,15 @@ export class HomeComponent implements OnInit {
     if (this.searchQuery.trim()) {
       this.router.navigate(['/restaurants'], { queryParams: { q: this.searchQuery } });
     }
+  }
+
+  searchNearby() {
+    this.router.navigate(['/restaurants'], {
+      queryParams: {
+        nearby: 1,
+        radius: this.nearbyRadius
+      }
+    });
   }
 
   browseCuisine(cuisine: string) {

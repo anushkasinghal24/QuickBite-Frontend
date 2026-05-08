@@ -28,14 +28,45 @@ export class ThemeService {
 // ── Cart State Service (client-side cart count/state) ────────────
 @Injectable({ providedIn: 'root' })
 export class CartStateService {
-  private _items = new BehaviorSubject<CartItem[]>([]);
+  private readonly storageKey = 'qb_cart_items';
+  private _items = new BehaviorSubject<CartItem[]>(this.loadStoredItems());
   items$ = this._items.asObservable();
 
+  get snapshot(): CartItem[] { return this._items.value; }
   get count(): number { return this._items.value.reduce((s,i) => s + i.quantity, 0); }
   get total(): number { return this._items.value.reduce((s,i) => s + i.price * i.quantity, 0); }
 
-  setCart(items: CartItem[]): void { this._items.next(items); }
-  clear(): void { this._items.next([]); }
+  setCart(items: CartItem[]): void {
+    const nextItems = Array.isArray(items) ? items : [];
+    this._items.next(nextItems);
+    this.persistItems(nextItems);
+  }
+
+  clear(): void {
+    this._items.next([]);
+    localStorage.removeItem(this.storageKey);
+  }
+
+  private loadStoredItems(): CartItem[] {
+    try {
+      const raw = localStorage.getItem(this.storageKey);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private persistItems(items: CartItem[]): void {
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(items));
+    } catch {
+      // Ignore storage failures; the in-memory cart still works.
+    }
+  }
 }
 
 // ── Toast Service ────────────────────────────────────────────────

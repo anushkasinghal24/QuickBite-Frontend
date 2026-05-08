@@ -68,6 +68,7 @@ export interface Restaurant {
   approvalStatus?: string;
   deliveryRadius: number;
   minOrderAmount: number;
+  costForTwo?: number;
   estimatedDeliveryMin: number;
   imageUrl?: string;
   openingTime?: string;
@@ -89,6 +90,7 @@ export interface MenuCategory {
   itemCount?: number;
   createdAt?: string;
   items?: MenuItem[];
+  menuItems?: MenuItem[];
 }
 
 export interface MenuItem {
@@ -99,6 +101,7 @@ export interface MenuItem {
   name: string;
   description?: string;
   price: number;
+  discountPercent?: number;
   discountedPrice?: number;
   effectivePrice?: number;
   imageUrl?: string;
@@ -134,7 +137,7 @@ export interface CartItem {
 }
 
 // ── Order ──────────────────────────────────────────────────────
-export type OrderStatus = 'PLACED'|'CONFIRMED'|'PREPARING'|'PICKED_UP'|'DELIVERED'|'CANCELLED';
+export type OrderStatus = 'PLACED'|'CONFIRMED'|'PREPARING'|'READY_TO_PICK_UP'|'PICKED_UP'|'DELIVERED'|'CANCELLED';
 export type PaymentMode  = 'COD'|'CARD'|'UPI'|'WALLET';
 
 export interface Order {
@@ -153,8 +156,44 @@ export interface Order {
   deliveryAddress: string;
   specialInstructions?: string;
   items: OrderItem[];
+  itemCount?: number;
+  cancellable?: boolean;
   agentName?: string;
   agentPhone?: string;
+}
+
+export interface OrderSummary {
+  orderId: number;
+  customerId: number;
+  customerName?: string;
+  restaurantId: number;
+  restaurantName?: string;
+  deliveryAgentId?: number | null;
+  deliveryAddress?: string;
+  orderStatus: OrderStatus;
+  finalAmount: number;
+  modeOfPayment: PaymentMode;
+  orderDate: string;
+  itemCount: number;
+  cancellable: boolean;
+}
+
+export interface DeliveryHistory {
+  historyId?: number;
+  agentId: number;
+  orderId: number;
+  customerId?: number;
+  customerName?: string;
+  restaurantId?: number;
+  restaurantName?: string;
+  pickupAddress?: string;
+  deliveryAddress?: string;
+  finalAmount: number;
+  modeOfPayment: PaymentMode;
+  orderStatus: OrderStatus | string;
+  itemCount: number;
+  orderDate?: string;
+  deliveredAt?: string;
 }
 
 export interface OrderItem {
@@ -184,9 +223,63 @@ export interface Payment {
   status: PaymentStatus;
   mode: PaymentMode;
   transactionId?: string;
+  gatewayOrderId?: string;
+  gatewayPaymentId?: string;
   currency: string;
+  createdAt?: string;
   paidAt?: string;
   refundedAt?: string;
+}
+
+export interface RazorpayCreateOrderRequest {
+  orderId: number;
+  customerId: number;
+  amount: number;
+  mode: 'CARD' | 'UPI';
+  currency?: string;
+}
+
+export interface RazorpayCheckoutRequest {
+  amount: number;
+  mode: 'CARD' | 'UPI';
+  currency?: string;
+}
+
+export interface RazorpayCheckoutVerifyRequest {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+}
+
+export interface RazorpayOrderResponse {
+  keyId: string;
+  razorpayOrderId: string;
+  orderId?: number;
+  customerId?: number;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  receipt: string;
+}
+
+export interface RazorpayVerifyPaymentRequest {
+  orderId: number;
+  customerId: number;
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+  amount?: number;
+  currency?: string;
+}
+
+export interface RazorpayWalletTopUpResponse {
+  keyId: string;
+  razorpayOrderId: string;
+  customerId: number;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  receipt: string;
 }
 
 export interface Wallet {
@@ -219,6 +312,38 @@ export interface DeliveryAgent {
   isVerified: boolean;
   avgRating: number;
   totalDeliveries: number;
+  status?: string;
+  currentOrderId?: number;
+  totalEarnings?: number;
+  adminRemarks?: string;
+  locationUpdatedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AssignedOrderResponse {
+  orderId: number;
+  agentId: number;
+  restaurantId: number;
+  restaurantName: string;
+  pickupAddress: string;
+  pickupLatitude?: number;
+  pickupLongitude?: number;
+  customerName: string;
+  deliveryAddress: string;
+  orderStatus: OrderStatus;
+  orderDate?: string;
+  estimatedDelivery?: string;
+}
+
+export interface AgentLocationResponse {
+  agentId: number;
+  fullName: string;
+  currentLatitude?: number;
+  currentLongitude?: number;
+  locationUpdatedAt?: string;
+  avgRating?: number;
+  vehicleType?: string;
 }
 
 // ── Review ─────────────────────────────────────────────────────
@@ -234,6 +359,10 @@ export interface Review {
   reviewDate: string;
   isVerified: boolean;
   customerName?: string;
+  isFlagged?: boolean;
+  flagReason?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SubmitReviewRequest {
@@ -245,8 +374,21 @@ export interface SubmitReviewRequest {
   comment?: string;
 }
 
+export interface BulkNotificationRequest {
+  recipientIds?: number[];
+  broadcastAll?: boolean;
+  targetRole?: 'CUSTOMER' | 'OWNER' | 'AGENT' | null;
+  type: string;
+  title: string;
+  message: string;
+  channel?: 'APP' | 'EMAIL' | 'SMS' | 'ALL';
+  relatedId?: number;
+  relatedType?: string;
+  deepLinkUrl?: string;
+}
+
 // ── Notification ───────────────────────────────────────────────
-export type NotifType    = 'ORDER'|'PAYMENT'|'PROMO'|'DELIVERY';
+export type NotifType    = 'ORDER'|'NEW_ORDER_ALERT'|'PAYMENT'|'PROMO'|'DELIVERY';
 export type NotifChannel = 'APP'|'EMAIL'|'SMS';
 
 export interface Notification {
@@ -258,8 +400,11 @@ export interface Notification {
   channel: NotifChannel;
   relatedId?: number;
   relatedType?: string;
+  deepLinkUrl?: string;
   isRead: boolean;
+  audible?: boolean;
   sentAt: string;
+  readAt?: string;
 }
 
 // ── API Response Wrapper ───────────────────────────────────────
@@ -277,4 +422,42 @@ export interface DashboardStats {
 export interface RevenueData {
   label: string;
   amount: number;
+}
+
+export interface TopSellingItem {
+  menuItemId: number;
+  itemName: string;
+  quantitySold: number;
+  revenue: number;
+}
+
+export interface PeakHour {
+  hour: number;
+  label: string;
+  orderCount: number;
+}
+
+export interface RevenueAnalytics {
+  restaurantId: number;
+  restaurantName: string;
+  totalRevenue: number;
+  dailyRevenue: number;
+  weeklyRevenue: number;
+  monthlyRevenue: number;
+  totalOrders: number;
+  deliveredOrders: number;
+  cancelledOrders: number;
+  pendingOrders: number;
+  topSellingItems: TopSellingItem[];
+  peakHours: PeakHour[];
+}
+
+export interface EarningsSummary {
+  agentId: number;
+  fullName: string;
+  totalDeliveries: number;
+  totalEarnings: number;
+  avgRating: number;
+  isAvailable: boolean;
+  status: string;
 }

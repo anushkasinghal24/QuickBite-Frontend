@@ -43,15 +43,9 @@ import { Order, DeliveryAgent, OrderStatus } from '../../../core/models';
             <div>
               <div class="order-title">Order #{{ order.orderId }} · {{ order.restaurantName || ('Restaurant ' + order.restaurantId) }}</div>
               <div class="order-meta">{{ order.finalAmount | currency:'INR' }} · {{ order.modeOfPayment }} · {{ order.orderDate | date:'short' }}</div>
+              <div class="order-meta" *ngIf="!order.items.length">{{ getItemCount(order) }} item{{ getItemCount(order) === 1 ? '' : 's' }}</div>
             </div>
             <span class="pill">{{ order.orderStatus }}</span>
-          </div>
-
-          <div class="row-bottom">
-            <select class="input compact" [(ngModel)]="statusDraft[order.orderId]">
-              <option *ngFor="let status of orderStatuses" [value]="status">{{ status }}</option>
-            </select>
-            <button class="btn btn-primary" (click)="updateStatus(order)">Update status</button>
           </div>
 
           <div class="row-bottom">
@@ -80,6 +74,7 @@ import { Order, DeliveryAgent, OrderStatus } from '../../../core/models';
           <div>
             <div class="mini-title">#{{ order.orderId }} · {{ order.restaurantName || ('Restaurant ' + order.restaurantId) }}</div>
             <div class="mini-meta">Customer #{{ order.customerId }} · {{ order.modeOfPayment }} · {{ order.finalAmount | currency:'INR' }}</div>
+            <div class="mini-meta" *ngIf="!order.items.length">{{ getItemCount(order) }} item{{ getItemCount(order) === 1 ? '' : 's' }}</div>
           </div>
           <span class="pill muted">{{ order.orderStatus }}</span>
         </div>
@@ -92,11 +87,11 @@ import { Order, DeliveryAgent, OrderStatus } from '../../../core/models';
 </div>
   `,
   styles: [`
-.summary-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px}
-.summary-card{padding:18px}
-.summary-label{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:8px}
-.summary-value{font-size:1.8rem;font-weight:800}
-.two-up{grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:24px}
+.summary-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:stretch}
+.summary-card{padding:20px 18px;display:flex;flex-direction:column;gap:8px;min-height:112px}
+.summary-label{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
+.summary-value{font-size:clamp(1.55rem,2.3vw,1.8rem);font-weight:800;overflow-wrap:anywhere}
+.two-up{grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px}
 .panel{padding:20px}
 .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .stack{display:flex;flex-direction:column;gap:12px}
@@ -106,13 +101,24 @@ import { Order, DeliveryAgent, OrderStatus } from '../../../core/models';
 .order-meta{font-size:.84rem;color:var(--text-muted);margin-top:4px}
 .pill{padding:6px 10px;border-radius:999px;background:rgba(255,75,43,.1);color:var(--brand-primary);font-size:.78rem;font-weight:700}
 .pill.muted{background:rgba(100,116,139,.12);color:#475569}
-.input.compact{padding:9px 10px;min-width:220px}
+.input.compact{padding:9px 10px;min-width:min(100%,220px)}
 .mini-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-color)}
 .mini-row:last-child{border-bottom:none;padding-bottom:0}
 .mini-title{font-weight:700}
 .mini-meta{font-size:.82rem;color:var(--text-muted);margin-top:2px}
 .badge{min-width:28px;height:28px;padding:0 10px;border-radius:999px;background:var(--brand-primary);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700}
 .empty-copy{color:var(--text-muted);padding:10px 0}
+@media (max-width: 900px){
+  .summary-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .row-bottom{align-items:stretch}
+  .row-bottom .btn,.row-bottom .input{width:100%}
+}
+@media (max-width: 640px){
+  .summary-grid{grid-template-columns:1fr}
+  .two-up{grid-template-columns:1fr}
+  .mini-row{align-items:flex-start;flex-direction:column}
+  .pill{align-self:flex-start}
+}
   `]
 })
 export class AdminOrdersComponent implements OnInit {
@@ -120,9 +126,7 @@ export class AdminOrdersComponent implements OnInit {
   activeOrders: Order[] = [];
   verifiedAgents: DeliveryAgent[] = [];
   errorMessage = '';
-  statusDraft: Record<number, OrderStatus> = {};
   agentDraft: Record<number, number | null> = {};
-  orderStatuses: OrderStatus[] = ['PLACED', 'CONFIRMED', 'PREPARING', 'PICKED_UP', 'DELIVERED', 'CANCELLED'];
   summaryCards = [
     { label: 'Total orders', value: 0 },
     { label: 'Active orders', value: 0 },
@@ -130,7 +134,7 @@ export class AdminOrdersComponent implements OnInit {
     { label: 'Cancelled', value: 0 },
   ];
 
-  constructor(private ordersSvc: OrderService, private deliverySvc: DeliveryService) {}
+  constructor(private ordersSvc: OrderService, private deliverySvc: DeliveryService) { }
 
   ngOnInit(): void {
     this.load();
@@ -140,7 +144,6 @@ export class AdminOrdersComponent implements OnInit {
     this.ordersSvc.getAll().subscribe({
       next: orders => {
         this.recentOrders = [...orders].sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).slice(0, 12);
-        this.statusDraft = Object.fromEntries(this.recentOrders.map(order => [order.orderId, order.orderStatus])) as Record<number, OrderStatus>;
         this.errorMessage = '';
         this.refreshSummary(orders);
       },
@@ -158,20 +161,6 @@ export class AdminOrdersComponent implements OnInit {
     this.deliverySvc.getByStatus('VERIFIED').subscribe({
       next: agents => this.verifiedAgents = agents,
       error: () => this.errorMessage = 'Could not load verified agents.'
-    });
-  }
-
-  updateStatus(order: Order): void {
-    const status = this.statusDraft[order.orderId];
-    if (!status || status === order.orderStatus) {
-      return;
-    }
-
-    this.ordersSvc.updateStatus(order.orderId, status).subscribe({
-      next: updated => {
-        order.orderStatus = updated.orderStatus;
-      },
-      error: () => this.errorMessage = `Could not update order #${order.orderId}.`
     });
   }
 
@@ -197,5 +186,9 @@ export class AdminOrdersComponent implements OnInit {
       { label: 'Delivered', value: orders.filter(order => order.orderStatus === 'DELIVERED').length },
       { label: 'Cancelled', value: orders.filter(order => order.orderStatus === 'CANCELLED').length },
     ];
+  }
+
+  getItemCount(order: Order): number {
+    return order.items?.length || order.itemCount || 0;
   }
 }

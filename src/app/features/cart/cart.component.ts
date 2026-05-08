@@ -41,7 +41,7 @@ import { Cart } from '../../core/models';
               <div class="cart-item-info">
                 <div class="flex items-center gap-sm">
                   <div class="veg-indicator" [class.veg]="item.isVeg" [class.non-veg]="!item.isVeg"></div>
-                  <h4 class="cart-item-name">{{ item.name }}</h4>
+                  <h4 class="cart-item-name">{{ item.name || ('Item #' + item.menuItemId) }}</h4>
                 </div>
                 <p class="cart-item-price">₹{{ item.price }} each</p>
               </div>
@@ -161,10 +161,21 @@ export class CartComponent implements OnInit {
   ngOnInit() { this.loadCart(); }
 
   loadCart() {
+    if (this.cartState.snapshot.length) {
+      this.cart = this.buildLocalCart();
+      this.loading = false;
+      return;
+    }
+
     if (!this.auth.currentUser) { this.loading = false; return; }
     this.cartSvc.getCart(this.auth.currentUser.userId).subscribe({
       next: c => { this.cart = c; this.cartState.setCart(c.items); this.loading = false; },
-      error: () => { this.loading = false; }
+      error: () => {
+        if (this.cartState.snapshot.length) {
+          this.cart = this.buildLocalCart();
+        }
+        this.loading = false;
+      }
     });
   }
 
@@ -193,5 +204,18 @@ export class CartComponent implements OnInit {
       next: c => { this.cart = c; this.toast.success(`Promo "${this.promoCode}" applied! 🎉`); },
       error: () => this.toast.error('Invalid promo code')
     });
+  }
+
+  private buildLocalCart(): Cart {
+    const items = this.cartState.snapshot;
+    return {
+      cartId: 0,
+      customerId: this.auth.currentUser?.userId || 0,
+      restaurantId: this.cart?.restaurantId || 0,
+      totalPrice: this.cartState.total,
+      items: items.map(item => ({ ...item })),
+      promoCode: this.cart?.promoCode,
+      discount: this.cart?.discount || 0
+    };
   }
 }

@@ -68,17 +68,7 @@ import { User } from '../../../core/models';
               <div>{{ user.email }}</div>
               <div class="cell-sub">{{ user.phone }}</div>
             </td>
-            <td>
-              <select class="input compact" [(ngModel)]="roleDraft[user.userId]">
-                <option value="CUSTOMER">Customer</option>
-                <option value="OWNER">Owner</option>
-                <option value="AGENT">Agent</option>
-                <option value="ADMIN">Admin</option>
-              </select>
-              <button class="btn btn-sm btn-ghost" style="margin-top:8px" (click)="saveRole(user)">
-                Update role
-              </button>
-            </td>
+            <td>{{ user.role }}</td>
             <td>
               <span class="status-pill" [class.inactive]="!user.isActive">
                 {{ user.isActive ? 'Active' : 'Suspended' }}
@@ -109,17 +99,26 @@ import { User } from '../../../core/models';
 </div>
   `,
   styles: [`
-.toolbar{display:grid;grid-template-columns:1fr 220px auto auto;gap:12px;padding:16px;margin-bottom:20px;align-items:center}
+.toolbar{display:grid;grid-template-columns:minmax(0,1fr) 220px auto auto;gap:12px;padding:16px;margin-bottom:20px;align-items:center}
 .table-wrap{overflow:auto}
 .admin-table{width:100%;border-collapse:collapse}
 .admin-table th,.admin-table td{padding:14px 10px;border-bottom:1px solid var(--border-color);text-align:left;vertical-align:top}
 .admin-table th{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
 .cell-title{font-weight:700}
 .cell-sub{font-size:.78rem;color:var(--text-muted);margin-top:2px}
-.input.compact{padding:8px 10px;min-width:180px}
 .actions{display:flex;flex-direction:column;gap:8px}
 .status-pill{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(34,197,94,.12);color:#15803d;font-size:.78rem;font-weight:700}
 .status-pill.inactive{background:rgba(100,116,139,.14);color:#475569}
+@media (max-width: 900px){
+  .toolbar{grid-template-columns:1fr 1fr}
+  .toolbar .btn{width:100%}
+}
+@media (max-width: 640px){
+  .toolbar{grid-template-columns:1fr}
+  .admin-table th,.admin-table td{padding:12px 8px}
+  .actions{width:100%}
+  .actions .btn{width:100%}
+}
   `]
 })
 export class AdminUsersComponent implements OnInit {
@@ -128,9 +127,7 @@ export class AdminUsersComponent implements OnInit {
   searchTerm = '';
   roleFilter = '';
   errorMessage = '';
-  roleDraft: Record<number, User['role']> = {};
-
-  constructor(private auth: AuthService) {}
+  constructor(private auth: AuthService) { }
 
   ngOnInit(): void {
     this.loadUsers();
@@ -142,7 +139,6 @@ export class AdminUsersComponent implements OnInit {
       next: users => {
         this.users = users;
         this.filteredUsers = users;
-        this.roleDraft = Object.fromEntries(users.map(user => [user.userId, user.role])) as Record<number, User['role']>;
         this.applyTextFilter();
         this.errorMessage = '';
       },
@@ -161,7 +157,6 @@ export class AdminUsersComponent implements OnInit {
         next: users => {
           this.users = users;
           this.filteredUsers = this.filterByRole(users);
-          this.roleDraft = Object.fromEntries(this.filteredUsers.map(user => [user.userId, user.role])) as Record<number, User['role']>;
         },
         error: () => this.errorMessage = 'Search failed. Please try again.'
       });
@@ -175,20 +170,6 @@ export class AdminUsersComponent implements OnInit {
     this.searchTerm = '';
     this.roleFilter = '';
     this.loadUsers();
-  }
-
-  saveRole(user: User): void {
-    const nextRole = this.roleDraft[user.userId];
-    if (!nextRole || nextRole === user.role) {
-      return;
-    }
-
-    this.auth.updateUserRole(user.userId, nextRole).subscribe({
-      next: updated => {
-        user.role = updated.role;
-      },
-      error: () => this.errorMessage = `Could not update role for ${user.fullName}.`
-    });
   }
 
   toggleActive(user: User): void {
@@ -224,8 +205,8 @@ export class AdminUsersComponent implements OnInit {
     const term = this.searchTerm.trim().toLowerCase();
     const filtered = term
       ? this.users.filter(user =>
-          user.fullName.toLowerCase().includes(term) ||
-          user.email.toLowerCase().includes(term))
+        user.fullName.toLowerCase().includes(term) ||
+        user.email.toLowerCase().includes(term))
       : [...this.users];
     this.filteredUsers = this.filterByRole(filtered);
   }

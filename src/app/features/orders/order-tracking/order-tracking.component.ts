@@ -2,8 +2,8 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { interval, Subscription } from 'rxjs';
-import { OrderService } from '../../../core/services/api.services';
-import { Order, OrderStatus } from '../../../core/models';
+import { DeliveryService, OrderService } from '../../../core/services/api.services';
+import { DeliveryAgent, Order, OrderStatus } from '../../../core/models';
 
 @Component({
   selector: 'app-order-tracking',
@@ -55,23 +55,31 @@ import { Order, OrderStatus } from '../../../core/models';
     <div class="tracking-info animate-fadeInUp delay-300">
       <div class="card" style="padding:var(--space-lg)">
         <h4 style="margin-bottom:16px">Order #{{ order.orderId }}</h4>
-        <div *ngFor="let item of order.items" class="track-item">
-          <span>{{ item.name }}</span><span>×{{ item.quantity }}</span>
-        </div>
+        <ng-container *ngIf="order.items.length; else noItems">
+          <div *ngFor="let item of order.items" class="track-item">
+            <span>{{ item.name }}</span><span>×{{ item.quantity }}</span>
+          </div>
+        </ng-container>
+        <ng-template #noItems>
+          <div class="text-muted" style="font-size:.875rem;padding:4px 0 8px">
+            Item details are loading.
+          </div>
+        </ng-template>
         <div class="divider"></div>
         <div class="flex justify-between">
           <span class="text-muted">Total</span>
-          <strong>₹{{ order.finalAmount }}</strong>
+          <strong>₹{{ order.finalAmount || 0 }}</strong>
         </div>
       </div>
 
-      <div class="card agent-card" *ngIf="order.agentName && order.orderStatus !== 'PLACED' && order.orderStatus !== 'CONFIRMED'">
+      <div class="card agent-card" *ngIf="assignedAgent && order.orderStatus !== 'PLACED' && order.orderStatus !== 'CONFIRMED'">
         <div class="agent-avatar">🚴</div>
         <div class="agent-info">
-          <div class="agent-name">{{ order.agentName }}</div>
+          <div class="agent-name">{{ assignedAgentLabel }}</div>
           <div class="text-sm text-muted">Your delivery agent</div>
+          <div class="text-sm text-muted" *ngIf="assignedAgent?.phone">Phone: {{ assignedAgent.phone }}</div>
         </div>
-        <a [href]="'tel:' + order.agentPhone" class="btn btn-secondary btn-sm" *ngIf="order.agentPhone">
+        <a [href]="'tel:' + assignedAgent.phone" class="btn btn-secondary btn-sm" *ngIf="assignedAgent?.phone">
           📞 Call
         </a>
       </div>
@@ -107,22 +115,24 @@ import { Order, OrderStatus } from '../../../core/models';
 })
 export class OrderTrackingComponent implements OnInit, OnDestroy {
   order: Order | null = null;
+  assignedAgent: DeliveryAgent | null = null;
   loading = true;
   errorMessage = '';
   eta = '15-20 mins';
   private pollSub?: Subscription;
 
   steps = [
-    { status: 'PLACED', icon: '🕐', label: 'Placed' },
+    { status: 'PLACED', icon: '🕐', label: 'Ordered' },
     { status: 'CONFIRMED', icon: '✅', label: 'Confirmed' },
     { status: 'PREPARING', icon: '👨‍🍳', label: 'Preparing' },
+    { status: 'READY_TO_PICK_UP', icon: '📍', label: 'Ready for pickup' },
     { status: 'PICKED_UP', icon: '🛵', label: 'On the way' },
     { status: 'DELIVERED', icon: '🏠', label: 'Delivered' },
   ] as const;
 
-  statusOrder: OrderStatus[] = ['PLACED', 'CONFIRMED', 'PREPARING', 'PICKED_UP', 'DELIVERED'];
+  statusOrder: OrderStatus[] = ['PLACED', 'CONFIRMED', 'PREPARING', 'READY_TO_PICK_UP', 'PICKED_UP', 'DELIVERED'];
 
-  constructor(private route: ActivatedRoute, private orderSvc: OrderService) {}
+  constructor(private route: ActivatedRoute, private orderSvc: OrderService, private deliverySvc: DeliveryService) {}
 
   ngOnInit(): void {
     const id = Number(this.route.snapshot.paramMap.get('id'));
@@ -138,13 +148,37 @@ export class OrderTrackingComponent implements OnInit, OnDestroy {
         this.order = o;
         this.loading = false;
         this.errorMessage = '';
+        this.loadAssignedAgent();
       },
       error: () => {
         this.order = null;
+        this.assignedAgent = null;
         this.loading = false;
         this.errorMessage = 'Tracking data is temporarily unavailable.';
       }
     });
+  }
+
+  private loadAssignedAgent(): void {
+    const agentId = this.order?.deliveryAgentId;
+    if (!agentId) {
+      this.assignedAgent = null;
+      return;
+    }
+
+    this.deliverySvc.getById(agentId).subscribe({
+      next: agent => this.assignedAgent = agent,
+      error: () => {
+        this.assignedAgent = null;
+      }
+    });
+  }
+
+  get assignedAgentLabel(): string {
+    if (!this.assignedAgent) {
+      return this.order?.agentName || `Agent #${this.order?.deliveryAgentId ?? 'N/A'}`;
+    }
+    return `${this.assignedAgent.fullName} (Agent #${this.assignedAgent.agentId})`;
   }
 
   get isDelivered(): boolean {
@@ -166,6 +200,7 @@ export class OrderTrackingComponent implements OnInit, OnDestroy {
       PLACED: '🕐',
       CONFIRMED: '✅',
       PREPARING: '👨‍🍳',
+      READY_TO_PICK_UP: '📍',
       PICKED_UP: '🛵',
       DELIVERED: '🎉',
       CANCELLED: '❌',
@@ -182,6 +217,7 @@ export class OrderTrackingComponent implements OnInit, OnDestroy {
       PLACED: 'Order Received!',
       CONFIRMED: 'Restaurant Confirmed!',
       PREPARING: 'Chef is cooking...',
+      READY_TO_PICK_UP: 'Ready for pickup',
       PICKED_UP: 'On the way to you!',
       DELIVERED: 'Delivered! Enjoy!',
       CANCELLED: 'Order Cancelled',
@@ -198,6 +234,7 @@ export class OrderTrackingComponent implements OnInit, OnDestroy {
       PLACED: 'Your order has been placed and is waiting for restaurant confirmation.',
       CONFIRMED: 'Great! The restaurant has confirmed your order and will start soon.',
       PREPARING: 'Your food is being freshly prepared with care.',
+      READY_TO_PICK_UP: 'The restaurant has packed your order and a delivery agent is on the way to collect it.',
       PICKED_UP: 'Our delivery agent has picked up your order and is headed your way.',
       DELIVERED: 'Your order has been delivered. Bon appetit!',
       CANCELLED: 'Your order was cancelled.',

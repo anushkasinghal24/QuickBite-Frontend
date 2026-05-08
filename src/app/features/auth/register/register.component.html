@@ -97,6 +97,17 @@
           <span *ngIf="loading" class="spinner" style="width:20px;height:20px;border-width:2px"></span>
         </button>
 
+        <div class="divider-text"><span>or continue with</span></div>
+
+        <div class="oauth-btns">
+          <a [href]="googleOAuthUrl" class="oauth-btn">
+            <span>🔵</span> Google
+          </a>
+          <a [href]="githubOAuthUrl" class="oauth-btn">
+            <span>⚫</span> GitHub
+          </a>
+        </div>
+
       </form>
 
       <p class="auth-switch">

@@ -37,7 +37,7 @@ export class RestaurantDetailComponent implements OnInit {
     public auth: AuthService,
     private cartState: CartStateService,
     private toast: ToastService
-  ) {}
+  ) { }
 
   ngOnInit() {
     const id = Number(this.route.snapshot.paramMap.get('id'));
@@ -88,8 +88,8 @@ export class RestaurantDetailComponent implements OnInit {
 
   loadCart(customerId: number) {
     this.cartSvc.getCart(customerId).subscribe({
-      next: c => { this.cart = c; c.items.forEach(i => this.cartQty[i.menuItemId] = i.quantity); this.cartState.setCart(c.items); },
-      error: () => {}
+      next: c => { this.syncCart(c); },
+      error: () => { }
     });
   }
 
@@ -108,7 +108,7 @@ export class RestaurantDetailComponent implements OnInit {
     if (!this.auth.isLoggedIn) { this.router.navigate(['/login']); return; }
     const qty = (this.cartQty[item.itemId] || 0) + 1;
     this.cartQty[item.itemId] = qty;
-    this.cartSvc.addItem(this.auth.currentUser!.userId, item.restaurantId, item.itemId, 1).subscribe({
+    this.cartSvc.addItem(this.auth.currentUser!.userId, item.restaurantId, item.itemId, 1, undefined, item).subscribe({
       next: c => { this.cart = c; this.cartState.setCart(c.items); this.toast.success(`${item.name} added! 🛒`); },
       error: () => { this.cartQty[item.itemId]--; this.toast.error('Failed to add item.'); }
     });
@@ -141,8 +141,15 @@ export class RestaurantDetailComponent implements OnInit {
     }
   }
 
-  getRatingStars(rating: number): boolean[] { return Array.from({length:5},(_,i) => i < rating); }
+  getRatingStars(rating: number): boolean[] { return Array.from({ length: 5 }, (_, i) => i < rating); }
 
   get cartTotal(): number { return this.cart ? this.cart.totalPrice : 0; }
-  get cartItemCount(): number { return Object.values(this.cartQty).reduce((s,q) => s+q, 0); }
+  get cartItemCount(): number { return Object.values(this.cartQty).reduce((s, q) => s + q, 0); }
+
+  private syncCart(cart: Cart): void {
+    this.cart = cart;
+    this.cartQty = {};
+    cart.items.forEach(i => this.cartQty[i.menuItemId] = i.quantity);
+    this.cartState.setCart(cart.items);
+  }
 }

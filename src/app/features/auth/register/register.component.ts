@@ -1,9 +1,12 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { OnInit } from '@angular/core';
+import { finalize } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/ui.services';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-register',
@@ -12,7 +15,7 @@ import { ToastService } from '../../../core/services/ui.services';
   templateUrl: './register.component.html',
   styleUrls: ['./register.component.scss']
 })
-export class RegisterComponent {
+export class RegisterComponent implements OnInit {
   form: FormGroup;
   loading = false;
   showPass = false;
@@ -28,7 +31,8 @@ export class RegisterComponent {
     private fb: FormBuilder,
     private auth: AuthService,
     private toast: ToastService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute
   ) {
     this.form = this.fb.group({
       fullName: ['', [Validators.required, Validators.minLength(2)]],
@@ -38,13 +42,52 @@ export class RegisterComponent {
     });
   }
 
+  ngOnInit(): void {
+    const oauthError = this.route.snapshot.queryParamMap.get('oauthError');
+    if (oauthError) {
+      this.toast.error(oauthError);
+      this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: {},
+        replaceUrl: true
+      });
+    }
+  }
+
   selectRole(role: 'CUSTOMER'|'OWNER'|'AGENT') { this.selectedRole = role; }
 
+  get googleOAuthUrl(): string {
+    return `${environment.authUrl}/oauth2/authorization/google?role=${encodeURIComponent(this.selectedRole)}&origin=register`;
+  }
+
+  get githubOAuthUrl(): string {
+    return `${environment.authUrl}/oauth2/authorization/github?role=${encodeURIComponent(this.selectedRole)}&origin=register`;
+  }
+
   submit() {
-    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    if (this.loading) {
+      return;
+    }
+
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
     this.loading = true;
-    const payload = { ...this.form.value, role: this.selectedRole };
-    this.auth.register(payload).subscribe({
+    const payload = {
+      fullName: String(this.form.value.fullName ?? '').trim(),
+      email: String(this.form.value.email ?? '').trim().toLowerCase(),
+      phone: String(this.form.value.phone ?? '').trim(),
+      password: String(this.form.value.password ?? ''),
+      role: this.selectedRole
+    };
+
+    this.auth.register(payload).pipe(
+      finalize(() => {
+        this.loading = false;
+      })
+    ).subscribe({
       next: res => {
         this.toast.success(`Welcome to QuickBite, ${res.user.fullName}! 🎉`);
         this.router.navigate([res.user.role === 'CUSTOMER' ? '/home' :
@@ -52,7 +95,6 @@ export class RegisterComponent {
                               res.user.role === 'AGENT'    ? '/agent' : '/home']);
       },
       error: err => {
-        this.loading = false;
         this.toast.error(err?.error?.message || 'Registration failed. Please try again.');
       }
     });

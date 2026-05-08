@@ -34,6 +34,20 @@
         <button class="btn btn-primary btn-sm btn-search" (click)="search()">Search</button>
       </div>
 
+      <div class="nearby-search">
+        <input
+          type="number"
+          min="1"
+          max="50"
+          step="1"
+          class="nearby-radius"
+          [(ngModel)]="nearbyRadius"
+          title="Nearby radius in km"
+        >
+        <button class="btn btn-secondary btn-sm" (click)="searchNearby()">Find Near Me</button>
+      </div>
+      <p class="nearby-hint">Uses your browser location and the restaurant nearby endpoint.</p>
+
       <!-- Quick Tags -->
       <div class="quick-tags animate-fadeInUp delay-200">
         <span class="text-sm text-muted">Popular:</span>
@@ -162,7 +176,7 @@
           <div class="restaurant-meta">
             <span>⏱️ {{ r.estimatedDeliveryMin }} min</span>
             <span class="meta-divider">·</span>
-            <span>₹{{ r.minOrderAmount }} min</span>
+            <span>₹{{ r.costForTwo ?? r.minOrderAmount }} cost for two</span>
             <span class="meta-divider">·</span>
             <span>{{ r.city }}</span>
           </div>

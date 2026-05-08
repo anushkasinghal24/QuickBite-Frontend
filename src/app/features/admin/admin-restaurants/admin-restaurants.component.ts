@@ -40,7 +40,7 @@ import { Restaurant } from '../../../core/models';
           <div class="restaurant-stats">
             <span class="pill">{{ restaurant.approvalStatus }}</span>
             <span class="pill muted">{{ restaurant.isOpen ? 'Open' : 'Closed' }}</span>
-            <span class="pill muted">₹{{ restaurant.minOrderAmount || 0 }} min</span>
+            <span class="pill muted">₹{{ restaurant.costForTwo != null ? restaurant.costForTwo : restaurant.minOrderAmount }} cost for two</span>
           </div>
           <textarea
             class="input"
@@ -102,6 +102,15 @@ import { Restaurant } from '../../../core/models';
 .right-meta{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
 .badge{min-width:28px;height:28px;padding:0 10px;border-radius:999px;background:var(--brand-primary);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700}
 .empty-copy{color:var(--text-muted);padding:10px 0}
+@media (max-width: 900px){
+  .two-up{grid-template-columns:1fr}
+  .restaurant-card{padding:16px}
+}
+@media (max-width: 640px){
+  .mini-row{align-items:flex-start;flex-direction:column}
+  .right-meta{align-items:flex-start}
+  .actions .btn,.restaurant-card .input{width:100%}
+}
   `]
 })
 export class AdminRestaurantsComponent implements OnInit {
@@ -110,7 +119,7 @@ export class AdminRestaurantsComponent implements OnInit {
   rejectNotes: Record<number, string> = {};
   errorMessage = '';
 
-  constructor(private restaurantSvc: RestaurantService) {}
+  constructor(private restaurantSvc: RestaurantService) { }
 
   ngOnInit(): void {
     this.load();
@@ -126,7 +135,7 @@ export class AdminRestaurantsComponent implements OnInit {
       error: () => this.errorMessage = 'Could not load pending restaurants.'
     });
 
-    this.restaurantSvc.getAllPaged(0, 100).subscribe({
+    this.restaurantSvc.getApprovedAdmin(0, 100).subscribe({
       next: items => this.restaurants = items,
       error: () => this.errorMessage = 'Could not load restaurants.'
     });
@@ -134,7 +143,7 @@ export class AdminRestaurantsComponent implements OnInit {
 
   approve(restaurant: Restaurant): void {
     this.restaurantSvc.approve(restaurant.restaurantId, 'APPROVED').subscribe({
-      next: () => this.removePending(restaurant.restaurantId),
+      next: () => this.load(),
       error: () => this.errorMessage = `Could not approve ${restaurant.name}.`
     });
   }
@@ -142,13 +151,8 @@ export class AdminRestaurantsComponent implements OnInit {
   reject(restaurant: Restaurant): void {
     const reason = (this.rejectNotes[restaurant.restaurantId] || '').trim() || 'Rejected by admin';
     this.restaurantSvc.approve(restaurant.restaurantId, 'REJECTED', reason).subscribe({
-      next: () => this.removePending(restaurant.restaurantId),
+      next: () => this.load(),
       error: () => this.errorMessage = `Could not reject ${restaurant.name}.`
     });
-  }
-
-  private removePending(restaurantId: number): void {
-    this.pendingRestaurants = this.pendingRestaurants.filter(item => item.restaurantId !== restaurantId);
-    delete this.rejectNotes[restaurantId];
   }
 }

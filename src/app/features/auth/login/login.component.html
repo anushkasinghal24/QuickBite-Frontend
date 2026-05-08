@@ -69,6 +69,15 @@
 
         <div class="divider-text"><span>or continue with</span></div>
 
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label">Continue as</label>
+          <select formControlName="oauthRole" class="form-control">
+            <option value="CUSTOMER">Customer</option>
+            <option value="OWNER">Restaurant Owner</option>
+            <option value="AGENT">Delivery Agent</option>
+          </select>
+        </div>
+
         <div class="oauth-btns">
           <a [href]="googleOAuthUrl" class="oauth-btn">
             <span>🔵</span> Google

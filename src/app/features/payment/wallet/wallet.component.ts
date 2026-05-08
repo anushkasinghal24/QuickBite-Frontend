@@ -11,7 +11,7 @@ import { WalletStatement } from '../../../core/models';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-<div class="page-header"><div class="container"><h1>My Wallet 💳</h1><p>Manage your QuickBite wallet balance</p></div></div>
+<div class="page-header"><div class="container"><h1>My Wallet</h1><p>Manage your QuickBite wallet balance</p></div></div>
 <div class="container" style="padding:32px 0 64px">
   <div class="wallet-layout">
 
@@ -21,7 +21,6 @@ import { WalletStatement } from '../../../core/models';
       <div class="empty-desc">{{ errorMessage }}</div>
     </div>
 
-    <!-- Balance Card -->
     <div class="balance-card animate-scaleIn">
       <div class="balance-bg"></div>
       <div class="balance-content">
@@ -32,7 +31,6 @@ import { WalletStatement } from '../../../core/models';
       <div class="wallet-icon-bg">💳</div>
     </div>
 
-    <!-- Add Money -->
     <div class="card animate-fadeInUp delay-200">
       <div class="card-header"><h4>➕ Add Money</h4></div>
       <div class="card-body">
@@ -50,7 +48,6 @@ import { WalletStatement } from '../../../core/models';
       </div>
     </div>
 
-    <!-- Transactions -->
     <div class="card animate-fadeInUp delay-300">
       <div class="card-header"><h4>📜 Transaction History</h4></div>
       <div *ngIf="statements.length; else noTxn">
@@ -125,9 +122,109 @@ export class WalletComponent implements OnInit {
   addMoney() {
     if (!this.addAmount || !this.auth.currentUser) return;
     this.loading = true;
-    this.paymentSvc.addToWallet(this.auth.currentUser.userId, this.addAmount).subscribe({
-      next: w => { this.balance = w.balance; this.toast.success(`₹${this.addAmount} added to wallet! 💳`); this.addAmount = null; this.loading = false; },
-      error: () => { this.toast.error('Failed to add money'); this.loading = false; }
+    this.paymentSvc.createWalletTopUpOrder({
+      customerId: this.auth.currentUser.userId,
+      amount: this.addAmount
+    }).subscribe({
+      next: gateway => this.openRazorpayCheckout(gateway),
+      error: () => {
+        this.toast.error('Failed to start wallet top-up');
+        this.loading = false;
+      }
+    });
+  }
+
+  private async openRazorpayCheckout(gateway: { keyId: string; razorpayOrderId: string; amount: number; currency: string }) {
+    const loaded = await this.loadRazorpayScript();
+    if (!loaded) {
+      this.loading = false;
+      this.toast.error('Razorpay checkout failed to load.');
+      return;
+    }
+
+    const RazorpayCtor = (window as any).Razorpay;
+    if (!RazorpayCtor) {
+      this.loading = false;
+      this.toast.error('Razorpay is not available in this browser.');
+      return;
+    }
+
+    const options = {
+      key: gateway.keyId,
+      amount: Math.round(gateway.amount * 100),
+      currency: gateway.currency || 'INR',
+      name: 'QuickBite Wallet',
+      description: 'Add money to wallet',
+      order_id: gateway.razorpayOrderId,
+      prefill: {
+        name: this.auth.currentUser?.fullName || '',
+        email: this.auth.currentUser?.email || '',
+        contact: this.auth.currentUser?.phone || ''
+      },
+      theme: { color: '#ff4b2b' },
+      modal: {
+        ondismiss: () => {
+          this.loading = false;
+          this.toast.info('Wallet top-up cancelled.');
+        }
+      },
+      handler: (response: any) => {
+        this.paymentSvc.verifyWalletTopUpPayment({
+          customerId: this.auth.currentUser!.userId,
+          amount: gateway.amount,
+          razorpayOrderId: response.razorpay_order_id,
+          razorpayPaymentId: response.razorpay_payment_id,
+          razorpaySignature: response.razorpay_signature
+        }).subscribe({
+          next: () => {
+            this.paymentSvc.addToWallet(this.auth.currentUser!.userId, gateway.amount, response.razorpay_payment_id).subscribe({
+              next: w => {
+                this.balance = w.balance;
+                this.toast.success(`₹${gateway.amount} added to wallet!`);
+                this.addAmount = null;
+                this.loading = false;
+              },
+              error: () => {
+                this.loading = false;
+                this.toast.error('Payment verified, but wallet credit failed.');
+              }
+            });
+          },
+          error: () => {
+            this.loading = false;
+            this.toast.error('Wallet payment verification failed.');
+          }
+        });
+      }
+    };
+
+    const rzp = new RazorpayCtor(options);
+    rzp.on('payment.failed', (response: any) => {
+      this.loading = false;
+      this.toast.error(response?.error?.description || 'Payment failed');
+    });
+    rzp.open();
+  }
+
+  private loadRazorpayScript(): Promise<boolean> {
+    return new Promise(resolve => {
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existing) {
+        resolve(true);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
     });
   }
 }

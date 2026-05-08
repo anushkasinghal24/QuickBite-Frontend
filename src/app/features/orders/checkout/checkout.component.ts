@@ -52,10 +52,10 @@ type PaymentMethod = {
       <div class="card checkout-section">
         <div class="card-header"><h4>💰 Payment Method</h4></div>
         <div class="card-body">
-          <div class="payment-methods">
-            <div *ngFor="let pm of paymentMethods"
-                 class="payment-option" [class.selected]="selectedMode === pm.id"
-                 (click)="selectedMode = pm.id">
+            <div class="payment-methods">
+              <div *ngFor="let pm of paymentMethods"
+                   class="payment-option" [class.selected]="selectedMode === pm.id"
+                   (click)="selectPaymentMode(pm.id)">
               <span class="pm-icon">{{ pm.icon }}</span>
               <div class="pm-info">
                 <div class="pm-name">{{ pm.name }}</div>
@@ -172,19 +172,77 @@ export class CheckoutComponent implements OnInit {
   }
 
   ngOnInit() {
-    if (this.auth.currentUser) {
-      this.cartSvc.getCart(this.auth.currentUser.userId).subscribe({ next: c => this.cart = c, error: () => {} });
-      this.paymentSvc.getWalletBalance(this.auth.currentUser.userId).subscribe({ next: b => this.walletBalance = b, error: () => {} });
+    const hasClientCart = this.cartState.snapshot.length > 0;
+    if (hasClientCart) {
+      this.hydrateCartFromClientState();
+    }
+
+    if (this.auth.currentUser && !hasClientCart) {
+      this.cartSvc.getCart(this.auth.currentUser.userId).subscribe({
+        next: c => this.cart = c,
+        error: () => {
+          // Keep the locally hydrated cart so checkout can still render.
+          if (!this.cart && this.cartState.snapshot.length) {
+            this.hydrateCartFromClientState();
+          }
+        }
+      });
+    }
+    if (this.selectedMode === 'WALLET') {
+      this.loadWalletBalance();
     }
   }
 
   getFinalAmount(): number {
-    if (!this.cart) return 0;
-    return this.cart.totalPrice - (this.cart.discount || 0) + Math.round(this.cart.totalPrice * 0.05);
+    const subtotal = this.cart?.totalPrice ?? this.cartState.total;
+    const discount = this.cart?.discount || 0;
+    if (!subtotal) return 0;
+    return subtotal - discount + Math.round(subtotal * 0.05);
+  }
+
+  selectPaymentMode(mode: PaymentMode): void {
+    this.selectedMode = mode;
+    if (mode === 'WALLET') {
+      this.loadWalletBalance();
+    }
+  }
+
+  private loadWalletBalance(): void {
+    if (!this.auth.currentUser) return;
+    this.paymentSvc.getWalletBalance(this.auth.currentUser.userId).subscribe({
+      next: b => this.walletBalance = b,
+      error: () => {
+        this.walletBalance = 0;
+        this.toast.warning('Wallet balance could not be loaded right now.');
+      }
+    });
+  }
+
+  private hydrateCartFromClientState(): void {
+    const items = this.cartState.snapshot;
+    if (!items.length) {
+      return;
+    }
+
+    this.cart = {
+      cartId: 0,
+      customerId: this.auth.currentUser?.userId || 0,
+      restaurantId: 0,
+      totalPrice: this.cartState.total,
+      items: items.map(item => ({ ...item })),
+      promoCode: undefined,
+      discount: 0
+    };
   }
 
   placeOrder() {
+    if (this.loading) return;
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    if (!this.cart && !this.cartState.snapshot.length) {
+      this.toast.error('Your cart is empty. Please add items before placing the order.');
+      return;
+    }
+
     const finalAmount = this.getFinalAmount();
     if (this.selectedMode === 'WALLET' && this.walletBalance < finalAmount) {
       this.toast.error('Insufficient wallet balance.');
@@ -196,29 +254,212 @@ export class CheckoutComponent implements OnInit {
       modeOfPayment: this.selectedMode,
       specialInstructions: this.form.value.specialInstructions
     };
+
+    if (this.selectedMode === 'UPI' || this.selectedMode === 'CARD') {
+      this.startRazorpayFirst(payload, finalAmount);
+      return;
+    }
+
+    this.loading = true;
     this.orderSvc.placeOrder(payload).subscribe({
       next: order => {
-        this.paymentSvc.processPayment({
-          orderId: order.orderId,
-          customerId: this.auth.currentUser!.userId,
-          amount: finalAmount,
-          mode: this.selectedMode
+        if (this.selectedMode === 'COD') {
+          this.paymentSvc.processPayment({
+            orderId: order.orderId,
+            customerId: this.auth.currentUser!.userId,
+            amount: finalAmount,
+            mode: this.selectedMode
+          }).subscribe({
+            next: () => this.finishCheckout(order.orderId, 'Order placed successfully! Please pay cash on delivery.'),
+            error: err => {
+              this.loading = false;
+              this.toast.error(this.extractErrorMessage(err, 'Order placed, but payment record could not be saved'));
+              this.router.navigate(['/orders', order.orderId, 'track']);
+            }
+          });
+          return;
+        }
+
+        if (this.selectedMode === 'WALLET') {
+          this.paymentSvc.processPayment({
+            orderId: order.orderId,
+            customerId: this.auth.currentUser!.userId,
+            amount: finalAmount,
+            mode: this.selectedMode
+          }).subscribe({
+            next: () => this.finishCheckout(order.orderId, 'Order placed successfully! 🎉'),
+            error: err => {
+              this.loading = false;
+              this.toast.error(this.extractErrorMessage(err, 'Order placed, but payment failed'));
+              this.router.navigate(['/orders', order.orderId, 'track']);
+            }
+          });
+          return;
+        }
+
+        this.loading = false;
+      },
+      error: err => {
+        this.loading = false;
+        this.toast.error(this.extractErrorMessage(err, 'Failed to place order'));
+      }
+    });
+  }
+
+  private startRazorpayFirst(orderPayload: { deliveryAddress: string; modeOfPayment: PaymentMode; specialInstructions?: string; }, finalAmount: number): void {
+    this.loading = true;
+    const gatewayMode = this.selectedMode as 'CARD' | 'UPI';
+    this.paymentSvc.createRazorpayCheckoutOrder({
+      amount: finalAmount,
+      mode: gatewayMode,
+      currency: 'INR'
+    }).subscribe({
+      next: gateway => this.openRazorpayCheckout(orderPayload, finalAmount, gateway),
+      error: err => {
+        this.loading = false;
+        this.toast.error(this.extractErrorMessage(err, 'Unable to start Razorpay checkout'));
+      }
+    });
+  }
+
+  private finishCheckout(orderId: number, message: string) {
+    this.cartState.clear();
+    this.toast.success(message);
+    this.loading = false;
+    this.router.navigate(['/orders', orderId, 'track']);
+  }
+
+  private async openRazorpayCheckout(
+    orderPayload: { deliveryAddress: string; modeOfPayment: PaymentMode; specialInstructions?: string; },
+    amount: number,
+    gateway: { keyId: string; razorpayOrderId: string; currency: string }
+  ) {
+    const loaded = await this.loadRazorpayScript();
+    if (!loaded) {
+      this.loading = false;
+      this.toast.error('Razorpay checkout failed to load.');
+      return;
+    }
+
+    const RazorpayCtor = (window as any).Razorpay;
+    if (!RazorpayCtor) {
+      this.loading = false;
+      this.toast.error('Razorpay is not available in this browser.');
+      return;
+    }
+
+    const options = {
+      key: gateway.keyId,
+      amount: Math.round(amount * 100),
+      currency: gateway.currency || 'INR',
+      name: 'QuickBite',
+      description: 'QuickBite checkout',
+      order_id: gateway.razorpayOrderId.startsWith('QB-MOCK-') ? undefined : gateway.razorpayOrderId,
+      prefill: {
+        name: this.auth.currentUser?.fullName || '',
+        email: this.auth.currentUser?.email || '',
+        contact: this.auth.currentUser?.phone || ''
+      },
+      theme: { color: '#ff4b2b' },
+      modal: {
+        ondismiss: () => {
+          this.loading = false;
+          this.toast.info('Payment cancelled.');
+        }
+      },
+      handler: (response: any) => {
+        const finalizeOrder = () => {
+          this.orderSvc.placeOrder(orderPayload).subscribe({
+            next: order => {
+              this.paymentSvc.processPayment({
+                orderId: order.orderId,
+                customerId: this.auth.currentUser!.userId,
+                amount,
+                mode: this.selectedMode
+              }).subscribe({
+                next: () => this.finishCheckout(order.orderId, 'Payment successful! Order placed successfully! 🎉'),
+                error: err => {
+                  this.loading = false;
+                  this.toast.error(this.extractErrorMessage(err, 'Order placed, but payment record could not be saved'));
+                  this.router.navigate(['/orders', order.orderId, 'track']);
+                }
+              });
+            },
+            error: err => {
+              this.loading = false;
+              this.toast.error(this.extractErrorMessage(err, 'Payment verified, but order could not be placed'));
+            }
+          });
+        };
+
+        if (gateway.razorpayOrderId.startsWith('QB-MOCK-')) {
+          finalizeOrder();
+          return;
+        }
+
+        this.paymentSvc.verifyRazorpayCheckoutPayment({
+          razorpayOrderId: response.razorpay_order_id,
+          razorpayPaymentId: response.razorpay_payment_id,
+          razorpaySignature: response.razorpay_signature
         }).subscribe({
-          next: () => {
-            this.cartState.clear();
-            this.toast.success('Order placed successfully! 🎉');
-            this.router.navigate(['/orders', order.orderId, 'track']);
-          },
+          next: () => finalizeOrder(),
           error: err => {
             this.loading = false;
-            this.toast.error(err?.error?.message || 'Order placed, but payment failed');
-            this.router.navigate(['/orders', order.orderId, 'track']);
+            this.toast.error(err?.error?.message || 'Payment verification failed');
           }
         });
-      },
-      error: err => { this.loading = false; this.toast.error(err?.error?.message || 'Failed to place order'); }
+      }
+    };
+
+    const rzp = new RazorpayCtor(options);
+    rzp.on('payment.failed', (response: any) => {
+      this.loading = false;
+      this.toast.error(response?.error?.description || 'Payment failed');
+    });
+    rzp.open();
+  }
+
+  private loadRazorpayScript(): Promise<boolean> {
+    return new Promise(resolve => {
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existing) {
+        resolve(true);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
     });
   }
 
   get addr() { return this.form.get('deliveryAddress')!; }
+
+  private extractErrorMessage(err: any, fallback: string): string {
+    const apiError = err?.error;
+    if (typeof apiError === 'string' && apiError.trim()) {
+      return apiError;
+    }
+    if (apiError?.message) {
+      return apiError.message;
+    }
+    if (apiError?.data && typeof apiError.data === 'object') {
+      const details = Object.entries(apiError.data)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ');
+      if (details) return details;
+    }
+    if (err?.message) {
+      return err.message;
+    }
+    return fallback;
+  }
 }

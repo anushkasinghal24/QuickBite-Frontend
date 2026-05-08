@@ -104,6 +104,10 @@ export const routes: Routes = [
       {
         path: 'analytics',
         loadComponent: () => import('./features/restaurant-owner/owner-analytics/owner-analytics.component').then(m => m.OwnerAnalyticsComponent)
+      },
+      {
+        path: 'reviews',
+        loadComponent: () => import('./features/restaurant-owner/owner-reviews/owner-reviews.component').then(m => m.OwnerReviewsComponent)
       }
     ]
   },
@@ -138,12 +142,28 @@ export const routes: Routes = [
         loadComponent: () => import('./features/admin/admin-restaurants/admin-restaurants.component').then(m => m.AdminRestaurantsComponent)
       },
       {
+        path: 'agents',
+        loadComponent: () => import('./features/admin/admin-agents/admin-agents.component').then(m => m.AdminAgentsComponent)
+      },
+      {
         path: 'orders',
         loadComponent: () => import('./features/admin/admin-orders/admin-orders.component').then(m => m.AdminOrdersComponent)
       },
       {
         path: 'analytics',
         loadComponent: () => import('./features/admin/admin-analytics/admin-analytics.component').then(m => m.AdminAnalyticsComponent)
+      },
+      {
+        path: 'finance',
+        loadComponent: () => import('./features/admin/admin-finance/admin-finance.component').then(m => m.AdminFinanceComponent)
+      },
+      {
+        path: 'notifications',
+        loadComponent: () => import('./features/admin/admin-notifications/admin-notifications.component').then(m => m.AdminNotificationsComponent)
+      },
+      {
+        path: 'reviews',
+        loadComponent: () => import('./features/admin/admin-reviews/admin-reviews.component').then(m => m.AdminReviewsComponent)
       }
     ]
   },

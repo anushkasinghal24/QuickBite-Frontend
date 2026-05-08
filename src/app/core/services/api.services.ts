@@ -4,8 +4,11 @@ import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   Restaurant, MenuCategory, MenuItem, Cart, CartItem,
-  Order, PlaceOrderRequest, Payment, Wallet, WalletStatement,
-  DeliveryAgent, Review, SubmitReviewRequest, Notification, DashboardStats,
+  Order, OrderItem, PlaceOrderRequest, Payment, Wallet, WalletStatement,
+  RazorpayCreateOrderRequest, RazorpayCheckoutRequest, RazorpayCheckoutVerifyRequest,
+  RazorpayOrderResponse, RazorpayVerifyPaymentRequest, RazorpayWalletTopUpResponse,
+  DeliveryAgent, Review, SubmitReviewRequest, BulkNotificationRequest, Notification, DashboardStats,
+  AssignedOrderResponse, AgentLocationResponse, EarningsSummary, OrderSummary, DeliveryHistory,
   ApiResponse, PagedResponse
 } from '../models';
 
@@ -18,28 +21,117 @@ function unwrapData<T>(response: ApiResponse<T>): T {
   return response.data as T;
 }
 
+function normalizeOrderItem(item: any): OrderItem {
+  return {
+    orderItemId: Number(item?.orderItemId ?? item?.id ?? 0),
+    orderId: Number(item?.orderId ?? 0),
+    menuItemId: Number(item?.menuItemId ?? 0),
+    name: item?.name ?? item?.menuItemName ?? 'Item',
+    price: Number(item?.price ?? item?.lineTotal ?? 0),
+    quantity: Number(item?.quantity ?? 0),
+    customization: item?.customization ?? undefined
+  };
+}
+
+function normalizeOrder(order: any): Order {
+  const rawItems = Array.isArray(order?.items)
+    ? order.items
+    : Array.isArray(order?.orderItems)
+      ? order.orderItems
+      : [];
+  const items = rawItems.map(normalizeOrderItem);
+
+  return {
+    ...order,
+    totalAmount: Number(order?.totalAmount ?? 0),
+    discount: Number(order?.discount ?? 0),
+    finalAmount: Number(order?.finalAmount ?? order?.totalAmount ?? 0),
+    modeOfPayment: order?.modeOfPayment ?? order?.paymentMode ?? 'COD',
+    orderStatus: order?.orderStatus ?? 'PLACED',
+    orderDate: order?.orderDate ?? new Date().toISOString(),
+    deliveryAddress: order?.deliveryAddress ?? '',
+    specialInstructions: order?.specialInstructions ?? undefined,
+    items,
+    itemCount: Number.isFinite(Number(order?.itemCount)) ? Number(order.itemCount) : items.length,
+    cancellable: typeof order?.cancellable === 'boolean' ? order.cancellable : undefined
+  };
+}
+
+function normalizeOrders(orders: any[]): Order[] {
+  return (orders || []).map(normalizeOrder);
+}
+
+function normalizeOrderSummary(order: any): OrderSummary {
+  return {
+    orderId: Number(order?.orderId ?? 0),
+    customerId: Number(order?.customerId ?? 0),
+    customerName: order?.customerName ?? undefined,
+    restaurantId: Number(order?.restaurantId ?? 0),
+    restaurantName: order?.restaurantName ?? undefined,
+    deliveryAgentId: order?.deliveryAgentId ?? null,
+    deliveryAddress: order?.deliveryAddress ?? undefined,
+    orderStatus: order?.orderStatus ?? 'PLACED',
+    finalAmount: Number(order?.finalAmount ?? 0),
+    modeOfPayment: order?.modeOfPayment ?? 'COD',
+    orderDate: order?.orderDate ?? new Date().toISOString(),
+    itemCount: Number.isFinite(Number(order?.itemCount)) ? Number(order.itemCount) : 0,
+    cancellable: typeof order?.cancellable === 'boolean' ? order.cancellable : false
+  };
+}
+
+function normalizeOrderSummaries(orders: any[]): OrderSummary[] {
+  return (orders || []).map(normalizeOrderSummary);
+}
+
+function normalizeDeliveryHistory(entry: any): DeliveryHistory {
+  return {
+    historyId: Number(entry?.historyId ?? entry?.id ?? 0),
+    agentId: Number(entry?.agentId ?? 0),
+    orderId: Number(entry?.orderId ?? 0),
+    customerId: entry?.customerId != null ? Number(entry.customerId) : undefined,
+    customerName: entry?.customerName ?? undefined,
+    restaurantId: entry?.restaurantId != null ? Number(entry.restaurantId) : undefined,
+    restaurantName: entry?.restaurantName ?? undefined,
+    pickupAddress: entry?.pickupAddress ?? undefined,
+    deliveryAddress: entry?.deliveryAddress ?? undefined,
+    finalAmount: Number(entry?.finalAmount ?? 0),
+    modeOfPayment: entry?.modeOfPayment ?? 'COD',
+    orderStatus: entry?.orderStatus ?? 'DELIVERED',
+    itemCount: Number.isFinite(Number(entry?.itemCount)) ? Number(entry.itemCount) : 0,
+    orderDate: entry?.orderDate ?? undefined,
+    deliveredAt: entry?.deliveredAt ?? undefined
+  };
+}
+
 // ── Restaurant Service ──────────────────────────────────────────
 @Injectable({ providedIn: 'root' })
 export class RestaurantService {
   private url = `${API}/restaurants`;
   constructor(private http: HttpClient) {}
 
-  getAll(city?: string, cuisine?: string): Observable<Restaurant[]> {
-    let params = new HttpParams();
-    if (city) params = params.set('city', city);
-    if (cuisine) params = params.set('cuisine', cuisine);
+  getAll(page = 0, size = 100): Observable<Restaurant[]> {
+    const params = new HttpParams()
+      .set('page', page)
+      .set('size', size);
     return this.http.get<ApiResponse<PagedResponse<Restaurant>>>(this.url, { params }).pipe(
       map(response => response.data?.content || [])
     );
   }
 
-  getAllPaged(page = 0, size = 100, city?: string, cuisine?: string): Observable<Restaurant[]> {
+  getAllPaged(page = 0, size = 100): Observable<Restaurant[]> {
     let params = new HttpParams()
       .set('page', page)
       .set('size', size);
-    if (city) params = params.set('city', city);
-    if (cuisine) params = params.set('cuisine', cuisine);
     return this.http.get<ApiResponse<PagedResponse<Restaurant>>>(this.url, { params }).pipe(
+      map(response => response.data?.content || [])
+    );
+  }
+
+  getApprovedAdmin(page = 0, size = 100): Observable<Restaurant[]> {
+    const params = new HttpParams()
+      .set('page', page)
+      .set('size', size);
+    return this.http.get<ApiResponse<PagedResponse<Restaurant>>>(`${this.url}/admin/approved`, { params }).pipe(
       map(response => response.data?.content || [])
     );
   }
@@ -62,11 +154,28 @@ export class RestaurantService {
     );
   }
 
-  getNearby(lat: number, lng: number): Observable<Restaurant[]> {
+  getNearby(lat: number, lng: number, radius?: number): Observable<Restaurant[]> {
+    let params = new HttpParams()
+      .set('lat', lat)
+      .set('lng', lng);
+    if (radius != null && !Number.isNaN(radius)) {
+      params = params.set('radius', radius);
+    }
     return this.http.get<ApiResponse<Restaurant[]>>(`${this.url}/nearby`, {
-      params: new HttpParams().set('lat', lat).set('lng', lng)
+      params
     }).pipe(
       map(response => response.data || [])
+    );
+  }
+
+  getByCity(city: string, page = 0, size = 100): Observable<Restaurant[]> {
+    const params = new HttpParams()
+      .set('page', page)
+      .set('size', size);
+    return this.http.get<ApiResponse<PagedResponse<Restaurant>>>(`${this.url}/city/${encodeURIComponent(city)}`, {
+      params
+    }).pipe(
+      map(response => response.data?.content || [])
     );
   }
 
@@ -179,16 +288,17 @@ export class MenuService {
   }
 
   search(restaurantId: number, q: string): Observable<MenuItem[]> {
-    return this.http.get<ApiResponse<MenuItem[]>>(`${this.url}/${restaurantId}/search`, {
+    return this.http.get<ApiResponse<MenuItem[]>>(`${this.url}/${restaurantId}/items/search`, {
       params: new HttpParams().set('keyword', q)
     }).pipe(map(response => response.data || []));
   }
 
   getVegItems(restaurantId: number): Observable<MenuItem[]> {
-    return this.http.get<ApiResponse<MenuItem[]>>(`${this.url}/${restaurantId}/veg`).pipe(
+    return this.http.get<ApiResponse<MenuItem[]>>(`${this.url}/${restaurantId}/items/veg`).pipe(
       map(response => response.data || [])
     );
   }
+
 }
 
 // ── Cart Service ────────────────────────────────────────────────
@@ -203,8 +313,18 @@ export class CartService {
     );
   }
 
-  addItem(customerId: number, restaurantId: number, menuItemId: number, qty: number, note?: string): Observable<Cart> {
-    return this.http.post<ApiResponse<Cart>>(`${this.url}/${customerId}/items`, { menuItemId, restaurantId, quantity: qty, customization: note }).pipe(
+  addItem(customerId: number, restaurantId: number, menuItemId: number, qty: number, note?: string, snapshot?: Partial<MenuItem>): Observable<Cart> {
+    return this.http.post<ApiResponse<Cart>>(`${this.url}/${customerId}/items`, {
+      menuItemId,
+      restaurantId,
+      quantity: qty,
+      customization: note,
+      menuItemName: snapshot?.name,
+      menuItemPrice: snapshot?.price,
+      menuItemDiscountedPrice: snapshot?.discountedPrice,
+      menuItemImageUrl: snapshot?.imageUrl,
+      isVeg: snapshot?.isVeg
+    }).pipe(
       map(response => response.data!)
     );
   }
@@ -242,37 +362,43 @@ export class OrderService {
 
   placeOrder(data: PlaceOrderRequest): Observable<Order> {
     return this.http.post<ApiResponse<Order>>(`${this.url}`, data).pipe(
-      map(response => response.data!)
+      map(response => normalizeOrder(response.data))
     );
   }
 
   getById(id: number): Observable<Order> {
     return this.http.get<ApiResponse<Order>>(`${this.url}/${id}`).pipe(
-      map(response => response.data!)
+      map(response => normalizeOrder(response.data))
     );
   }
 
   getByCustomer(customerId: number): Observable<Order[]> {
     return this.http.get<ApiResponse<Order[]>>(`${this.url}/customer/${customerId}`).pipe(
-      map(response => response.data || [])
+      map(response => normalizeOrders(response.data || []))
+    );
+  }
+
+  getByAgent(agentId: number): Observable<OrderSummary[]> {
+    return this.http.get<ApiResponse<OrderSummary[]>>(`${this.url}/agent/${agentId}`).pipe(
+      map(response => normalizeOrderSummaries(response.data || []))
     );
   }
 
   getByRestaurant(restaurantId: number): Observable<Order[]> {
     return this.http.get<ApiResponse<Order[]>>(`${this.url}/restaurant/${restaurantId}`).pipe(
-      map(response => response.data || [])
+      map(response => normalizeOrders(response.data || []))
     );
   }
 
   getActive(customerId: number): Observable<Order[]> {
     return this.http.get<ApiResponse<Order[]>>(`${this.url}/customer/${customerId}/active`).pipe(
-      map(response => response.data || [])
+      map(response => normalizeOrders(response.data || []))
     );
   }
 
   updateStatus(orderId: number, status: string): Observable<Order> {
     return this.http.put<ApiResponse<Order>>(`${this.url}/${orderId}/status`, { status }).pipe(
-      map(response => response.data!)
+      map(response => normalizeOrder(response.data))
     );
   }
 
@@ -282,27 +408,39 @@ export class OrderService {
     );
   }
 
-  reorder(orderId: number): Observable<Order> {
-    return this.http.post<ApiResponse<Order>>(`${this.url}/${orderId}/reorder`, {}).pipe(
-      map(response => response.data!)
+  reorder(orderId: number, request: PlaceOrderRequest): Observable<Order> {
+    return this.http.post<ApiResponse<Order>>(`${this.url}/${orderId}/reorder`, request).pipe(
+      map(response => normalizeOrder(response.data))
     );
   }
 
   getAll(): Observable<Order[]> {
     return this.http.get<ApiResponse<Order[]>>(`${this.url}/all`).pipe(
-      map(response => response.data || [])
+      map(response => normalizeOrders(response.data || []))
     );
   }
 
   getAllActive(): Observable<Order[]> {
     return this.http.get<ApiResponse<Order[]>>(`${this.url}/all/active`).pipe(
-      map(response => response.data || [])
+      map(response => normalizeOrders(response.data || []))
     );
   }
 
   assignAgent(orderId: number, agentId: number): Observable<Order> {
     return this.http.put<ApiResponse<Order>>(`${this.url}/${orderId}/agent`, { agentId }).pipe(
+      map(response => normalizeOrder(response.data))
+    );
+  }
+
+  getRestaurantAnalytics(restaurantId: number): Observable<any> {
+    return this.http.get<ApiResponse<any>>(`${this.url}/restaurant/${restaurantId}/analytics`).pipe(
       map(response => response.data!)
+    );
+  }
+
+  getOrderCount(restaurantId: number): Observable<number> {
+    return this.http.get<ApiResponse<number>>(`${this.url}/count/${restaurantId}`).pipe(
+      map(response => response.data || 0)
     );
   }
 }
@@ -320,6 +458,42 @@ export class PaymentService {
     );
   }
 
+  createRazorpayOrder(data: RazorpayCreateOrderRequest): Observable<RazorpayOrderResponse> {
+    return this.http.post<ApiResponse<RazorpayOrderResponse>>(`${this.url}/razorpay/create-order`, data).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  createRazorpayCheckoutOrder(data: RazorpayCheckoutRequest): Observable<RazorpayOrderResponse> {
+    return this.http.post<ApiResponse<RazorpayOrderResponse>>(`${this.url}/razorpay/checkout`, data).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  verifyRazorpayPayment(data: RazorpayVerifyPaymentRequest): Observable<Payment> {
+    return this.http.post<ApiResponse<Payment>>(`${this.url}/razorpay/verify`, data).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  verifyRazorpayCheckoutPayment(data: RazorpayCheckoutVerifyRequest): Observable<void> {
+    return this.http.post<ApiResponse<void>>(`${this.url}/razorpay/verify-checkout`, data).pipe(
+      map(() => undefined)
+    );
+  }
+
+  createWalletTopUpOrder(data: { customerId: number; amount: number; currency?: string }): Observable<RazorpayWalletTopUpResponse> {
+    return this.http.post<ApiResponse<RazorpayWalletTopUpResponse>>(`${this.walUrl}/razorpay/create-order`, data).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  verifyWalletTopUpPayment(data: { customerId: number; amount: number; razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string; currency?: string }): Observable<void> {
+    return this.http.post<ApiResponse<void>>(`${this.walUrl}/razorpay/verify`, data).pipe(
+      map(() => undefined)
+    );
+  }
+
   getByOrder(orderId: number): Observable<Payment> {
     return this.http.get<ApiResponse<Payment>>(`${this.url}/order/${orderId}`).pipe(
       map(response => response.data!)
@@ -333,7 +507,14 @@ export class PaymentService {
   }
 
   refund(paymentId: number): Observable<Payment> {
-    return this.http.post<ApiResponse<Payment>>(`${this.url}/${paymentId}/refund`, {}).pipe(
+    return this.refundWithMode(paymentId, 'ORIGINAL');
+  }
+
+  refundWithMode(paymentId: number, refundTo: 'WALLET' | 'ORIGINAL' = 'ORIGINAL', reason = 'Customer requested refund'): Observable<Payment> {
+    return this.http.post<ApiResponse<Payment>>(`${this.url}/${paymentId}/refund`, {
+      reason,
+      refundTo
+    }).pipe(
       map(response => response.data!)
     );
   }
@@ -344,8 +525,13 @@ export class PaymentService {
     );
   }
 
-  addToWallet(customerId: number, amount: number): Observable<Wallet> {
-    return this.http.post<ApiResponse<Wallet>>(`${this.walUrl}/topup`, { customerId, amount, sourceMode: 'CARD' }).pipe(
+  addToWallet(customerId: number, amount: number, gatewayTransactionId?: string): Observable<Wallet> {
+    return this.http.post<ApiResponse<Wallet>>(`${this.walUrl}/topup`, {
+      customerId,
+      amount,
+      sourceMode: 'CARD',
+      gatewayTransactionId
+    }).pipe(
       map(response => response.data!)
     );
   }
@@ -399,7 +585,12 @@ export class DeliveryService {
   }
 
   getByUserId(userId: number): Observable<DeliveryAgent> {
-    return this.http.get<ApiResponse<DeliveryAgent>>(`${this.url}/user/${userId}`).pipe(
+    // Backend exposes the authenticated agent profile at /my.
+    return this.getMyProfile();
+  }
+
+  getMyProfile(): Observable<DeliveryAgent> {
+    return this.http.get<ApiResponse<DeliveryAgent>>(`${this.url}/my`).pipe(
       map(response => response.data!)
     );
   }
@@ -424,8 +615,26 @@ export class DeliveryService {
     );
   }
 
-  verifyAgent(agentId: number): Observable<void> {
-    return this.http.put<ApiResponse<void>>(`${this.url}/${agentId}/verify`, {}).pipe(
+  approveAgent(agentId: number): Observable<DeliveryAgent> {
+    return this.http.put<ApiResponse<DeliveryAgent>>(`${this.url}/${agentId}/approve`, {}).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  rejectAgent(agentId: number, remarks = ''): Observable<DeliveryAgent> {
+    return this.http.put<ApiResponse<DeliveryAgent>>(`${this.url}/${agentId}/reject`, { remarks }).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  suspendAgent(agentId: number, remarks = ''): Observable<DeliveryAgent> {
+    return this.http.put<ApiResponse<DeliveryAgent>>(`${this.url}/${agentId}/suspend`, { remarks }).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  verifyAgent(agentId: number, action: 'VERIFY' | 'REJECT' | 'SUSPEND' = 'VERIFY', remarks = ''): Observable<void> {
+    return this.http.put<ApiResponse<void>>(`${this.url}/${agentId}/verify`, { action, remarks }).pipe(
       map(() => undefined)
     );
   }
@@ -436,10 +645,32 @@ export class DeliveryService {
     );
   }
 
-  getActiveDeliveries(agentId: number): Observable<Order[]> {
-    return this.http.get<ApiResponse<Order[]>>(`${this.url}/${agentId}/active`).pipe(
-      map(response => response.data || [])
+  getAssignedOrder(agentId: number): Observable<AssignedOrderResponse> {
+    return this.http.get<ApiResponse<AssignedOrderResponse>>(`${this.url}/${agentId}/assigned-order`).pipe(
+      map(response => response.data!)
     );
+  }
+
+  getLiveLocation(agentId: number): Observable<AgentLocationResponse> {
+    return this.http.get<ApiResponse<AgentLocationResponse>>(`${this.url}/${agentId}/location`).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  getEarnings(agentId: number): Observable<EarningsSummary> {
+    return this.http.get<ApiResponse<EarningsSummary>>(`${this.url}/${agentId}/earnings`).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  getHistory(agentId: number): Observable<DeliveryHistory[]> {
+    return this.http.get<ApiResponse<DeliveryHistory[]>>(`${this.url}/${agentId}/history`).pipe(
+      map(response => (response.data || []).map(normalizeDeliveryHistory))
+    );
+  }
+
+  getActiveDeliveries(): Observable<DeliveryAgent[]> {
+    return this.getActive();
   }
 
   completeDelivery(agentId: number, orderId: number): Observable<void> {
@@ -448,8 +679,14 @@ export class DeliveryService {
     );
   }
 
+  pickUpOrder(agentId: number, orderId: number): Observable<void> {
+    return this.http.post<ApiResponse<void>>(`${this.url}/${agentId}/pickup/${orderId}`, {}).pipe(
+      map(() => undefined)
+    );
+  }
+
   getAll(): Observable<DeliveryAgent[]> {
-    return this.http.get<ApiResponse<DeliveryAgent[]>>(this.url).pipe(
+    return this.http.get<ApiResponse<DeliveryAgent[]>>(`${this.url}/all`).pipe(
       map(response => response.data || [])
     );
   }
@@ -509,6 +746,42 @@ export class ReviewService {
     );
   }
 
+  getAvgDeliveryRating(agentId: number): Observable<number> {
+    return this.http.get<ApiResponse<number>>(`${this.url}/agent/${agentId}/average`).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  getRestaurantSummary(restaurantId: number): Observable<any> {
+    return this.http.get<ApiResponse<any>>(`${this.url}/restaurant/${restaurantId}/summary`).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  getAgentSummary(agentId: number): Observable<any> {
+    return this.http.get<ApiResponse<any>>(`${this.url}/agent/${agentId}/summary`).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  updateReview(reviewId: number, data: Partial<SubmitReviewRequest>): Observable<Review> {
+    return this.http.put<ApiResponse<Review>>(`${this.url}/${reviewId}`, data).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  flagReview(reviewId: number, reason: string): Observable<Review> {
+    return this.http.put<ApiResponse<Review>>(`${this.url}/${reviewId}/flag`, { reason }).pipe(
+      map(response => response.data!)
+    );
+  }
+
+  verifyReview(reviewId: number): Observable<Review> {
+    return this.http.put<ApiResponse<Review>>(`${this.url}/${reviewId}/verify`, {}).pipe(
+      map(response => response.data!)
+    );
+  }
+
   deleteReview(id: number): Observable<void> {
     return this.http.delete<ApiResponse<void>>(`${this.url}/${id}`).pipe(
       map(() => undefined)
@@ -516,7 +789,13 @@ export class ReviewService {
   }
 
   getAll(): Observable<Review[]> {
-    return this.http.get<ApiResponse<Review[]>>(this.url).pipe(
+    return this.http.get<ApiResponse<Review[]>>(`${this.url}/all`).pipe(
+      map(response => response.data || [])
+    );
+  }
+
+  getFlagged(): Observable<Review[]> {
+    return this.http.get<ApiResponse<Review[]>>(`${this.url}/flagged`).pipe(
       map(response => response.data || [])
     );
   }
@@ -529,7 +808,9 @@ export class NotificationService {
   constructor(private http: HttpClient) {}
 
   getByRecipient(userId: number): Observable<Notification[]> {
-    return this.http.get<ApiResponse<PagedResponse<Notification>>>(`${this.url}/recipient/${userId}`).pipe(
+    return this.http.get<ApiResponse<PagedResponse<Notification>>>(`${this.url}/recipient/${userId}`, {
+      params: new HttpParams().set('page', 0).set('size', 20)
+    }).pipe(
       map(response => response.data?.content || [])
     );
   }
@@ -559,13 +840,26 @@ export class NotificationService {
   }
 
   getAll(): Observable<Notification[]> {
-    return this.http.get<ApiResponse<PagedResponse<Notification>>>(this.url).pipe(
+    return this.http.get<ApiResponse<PagedResponse<Notification>>>(`${this.url}/all`, {
+      params: new HttpParams().set('page', 0).set('size', 100)
+    }).pipe(
       map(response => response.data?.content || [])
     );
   }
 
-  sendBulk(userIds: number[], title: string, message: string): Observable<void> {
-    return this.http.post<ApiResponse<void>>(`${this.url}/send-bulk`, { recipientIds: userIds, title, message }).pipe(
+  sendBulk(data: BulkNotificationRequest): Observable<void> {
+    return this.http.post<ApiResponse<void>>(`${this.url}/send-bulk`, {
+      recipientIds: data.recipientIds || [],
+      broadcastAll: data.broadcastAll ?? false,
+      targetRole: data.targetRole ?? null,
+      type: data.type,
+      title: data.title,
+      message: data.message,
+      channel: data.channel || 'APP',
+      relatedId: data.relatedId,
+      relatedType: data.relatedType,
+      deepLinkUrl: data.deepLinkUrl
+    }).pipe(
       map(() => undefined)
     );
   }

@@ -74,13 +74,13 @@ import { User, Restaurant, Order, DeliveryAgent, Payment } from '../../../core/m
 </div>
   `,
   styles: [`
-.controls{display:grid;grid-template-columns:repeat(2,minmax(160px,1fr)) auto auto;gap:14px;align-items:end;padding:18px;margin-bottom:20px}
+.controls{display:grid;grid-template-columns:repeat(2,minmax(160px,1fr)) auto auto;gap:14px;align-items:flex-end;padding:18px;margin-bottom:20px}
 .controls label{display:block;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:6px}
-.summary-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px}
-.metric{padding:18px}
-.metric-label{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:8px}
-.metric-value{font-size:1.8rem;font-weight:800}
-.metric-note{font-size:.82rem;color:var(--text-muted);margin-top:6px}
+.summary-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:stretch}
+.metric{padding:20px 18px;display:flex;flex-direction:column;gap:8px;min-height:112px}
+.metric-label{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
+.metric-value{font-size:clamp(1.55rem,2.3vw,1.8rem);font-weight:800;overflow-wrap:anywhere}
+.metric-note{font-size:.82rem;color:var(--text-muted);margin-top:auto;line-height:1.45}
 .two-up{grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px}
 .panel{padding:20px}
 .stack{display:flex;flex-direction:column;gap:12px;margin-top:14px}
@@ -92,6 +92,19 @@ import { User, Restaurant, Order, DeliveryAgent, Payment } from '../../../core/m
 .health-list{display:flex;flex-direction:column;gap:12px;margin-top:14px}
 .health-row{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-color);color:var(--text-muted)}
 .health-row:last-child{border-bottom:none;padding-bottom:0}
+@media (max-width: 900px){
+  .controls{grid-template-columns:1fr 1fr}
+  .controls .btn,.controls .input{width:100%}
+  .summary-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .two-up{grid-template-columns:1fr}
+}
+@media (max-width: 640px){
+  .controls{grid-template-columns:1fr}
+  .summary-grid{grid-template-columns:1fr}
+  .bar-row{grid-template-columns:1fr;gap:6px}
+  .bar-value{text-align:left}
+  .health-row{align-items:flex-start;flex-direction:column}
+}
   `]
 })
 export class AdminAnalyticsComponent implements OnInit {
@@ -133,7 +146,7 @@ export class AdminAnalyticsComponent implements OnInit {
   loadAnalytics(): void {
     forkJoin({
       users: this.auth.getAllUsers().pipe(catchError(() => of([] as User[]))),
-      restaurants: this.restaurantsSvc.getAllPaged(0, 100).pipe(catchError(() => of([] as Restaurant[]))),
+      restaurants: this.restaurantsSvc.getApprovedAdmin(0, 100).pipe(catchError(() => of([] as Restaurant[]))),
       pendingRestaurants: this.restaurantsSvc.getPending().pipe(catchError(() => of([] as Restaurant[]))),
       agents: this.deliverySvc.getAll().pipe(catchError(() => of([] as DeliveryAgent[]))),
       pendingAgents: this.deliverySvc.getByStatus('PENDING').pipe(catchError(() => of([] as DeliveryAgent[]))),
@@ -161,7 +174,7 @@ export class AdminAnalyticsComponent implements OnInit {
         ];
 
         const total = this.orders.length || 1;
-        const statuses: OrderStatusLike[] = ['PLACED', 'CONFIRMED', 'PREPARING', 'PICKED_UP', 'DELIVERED', 'CANCELLED'];
+        const statuses: OrderStatusLike[] = ['PLACED', 'CONFIRMED', 'PREPARING', 'READY_TO_PICK_UP', 'PICKED_UP', 'DELIVERED', 'CANCELLED'];
         this.orderBreakdown = statuses.map(status => {
           const count = this.orders.filter(order => order.orderStatus === status).length;
           return { label: status, count, percent: Math.round((count / total) * 100) };
@@ -174,4 +187,4 @@ export class AdminAnalyticsComponent implements OnInit {
   }
 }
 
-type OrderStatusLike = 'PLACED' | 'CONFIRMED' | 'PREPARING' | 'PICKED_UP' | 'DELIVERED' | 'CANCELLED';
+type OrderStatusLike = 'PLACED' | 'CONFIRMED' | 'PREPARING' | 'READY_TO_PICK_UP' | 'PICKED_UP' | 'DELIVERED' | 'CANCELLED';
