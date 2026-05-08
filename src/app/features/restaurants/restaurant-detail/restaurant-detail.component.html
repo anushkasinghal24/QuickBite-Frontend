@@ -1,0 +1,211 @@
+<div *ngIf="loading" class="loading-overlay"><div class="spinner"></div></div>
+
+<div *ngIf="!loading && errorMessage" class="container" style="padding:48px 0">
+  <div class="empty-state">
+    <div class="empty-icon">🍽️</div>
+    <div class="empty-title">Restaurant unavailable</div>
+    <div class="empty-desc">{{ errorMessage }}</div>
+    <a routerLink="/restaurants" class="btn btn-primary mt-md">Back to Restaurants</a>
+  </div>
+</div>
+
+<ng-container *ngIf="!loading && restaurant && !errorMessage">
+
+<!-- Hero Banner -->
+<div class="restaurant-hero">
+  <img [src]="restaurant.imageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=85'"
+       [alt]="restaurant.name" class="hero-img">
+  <div class="hero-overlay"></div>
+  <div class="hero-content-inner container">
+    <div class="hero-badges">
+      <span class="badge badge-success" *ngIf="restaurant.isOpen">🟢 Open Now</span>
+      <span class="badge badge-error"   *ngIf="!restaurant.isOpen">🔴 Closed</span>
+      <span class="badge badge-brand">{{ restaurant.cuisine }}</span>
+    </div>
+    <h1 class="rest-hero-name">{{ restaurant.name }}</h1>
+    <p class="rest-hero-desc">{{ restaurant.description }}</p>
+    <div class="rest-hero-meta">
+      <span class="meta-chip">⭐ {{ restaurant.avgRating | number:'1.1-1' }} rating</span>
+      <span class="meta-chip">⏱ {{ restaurant.estimatedDeliveryMin }} min delivery</span>
+      <span class="meta-chip">₹{{ restaurant.costForTwo ?? restaurant.minOrderAmount }} cost for two</span>
+      <span class="meta-chip">📍 {{ restaurant.city }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Main Layout -->
+<div class="container detail-layout">
+
+  <!-- LEFT: Menu -->
+  <div class="menu-panel">
+
+    <!-- Tabs -->
+    <div class="detail-tabs">
+      <button class="tab" [class.active]="activeTab==='menu'"    (click)="activeTab='menu'">🍽️ Menu</button>
+      <button class="tab" [class.active]="activeTab==='reviews'" (click)="activeTab='reviews'">⭐ Reviews ({{ reviews.length }})</button>
+      <button class="tab" [class.active]="activeTab==='info'"    (click)="activeTab='info'">ℹ️ Info</button>
+    </div>
+
+    <!-- ── MENU TAB ── -->
+    <div *ngIf="activeTab==='menu'">
+      <!-- Menu Search + Veg Filter -->
+      <div class="menu-filters">
+        <div class="search-bar" style="flex:1;max-width:340px">
+          <span class="search-icon">🔍</span>
+          <input type="text" placeholder="Search menu..." [(ngModel)]="searchMenu">
+        </div>
+        <label class="veg-label">
+          <input type="checkbox" [(ngModel)]="showVegOnly">
+          <span class="veg-indicator veg"></span> Veg Only
+        </label>
+      </div>
+
+      <!-- Category Chips -->
+      <div class="cat-chips">
+        <button class="category-chip" [class.active]="activeCategory===0" (click)="activeCategory=0">All</button>
+        <button *ngFor="let c of categories" class="category-chip"
+                [class.active]="activeCategory===c.categoryId"
+                (click)="activeCategory=c.categoryId">{{ c.name }}</button>
+      </div>
+
+      <!-- Menu Items -->
+      <div class="menu-items-list">
+        <div *ngFor="let item of filteredItems" class="menu-item-card">
+          <div class="item-left">
+            <div class="flex items-center gap-sm" style="margin-bottom:4px">
+              <div class="veg-indicator" [class.veg]="item.isVeg" [class.non-veg]="!item.isVeg"></div>
+              <span class="badge badge-brand" *ngIf="item.tags?.includes('bestseller')" style="font-size:.7rem;padding:2px 7px">🔥 Bestseller</span>
+              <span class="badge badge-warning" *ngIf="item.tags?.includes('spicy')" style="font-size:.7rem;padding:2px 7px">🌶️ Spicy</span>
+            </div>
+
+            <div class="item-name">{{ item.name }}</div>
+            <div class="item-desc">{{ item.description }}</div>
+
+            <div class="item-bottom">
+              <div class="item-price">
+                <span class="price">₹{{ item.discountedPrice || item.price }}</span>
+                <span class="price-original" *ngIf="item.discountedPrice">₹{{ item.price }}</span>
+                <span class="price-discount" *ngIf="item.discountedPrice">
+                  {{ ((item.price - item.discountedPrice) / item.price * 100) | number:'1.0-0' }}% off
+                </span>
+              </div>
+              <span class="cal-badge" *ngIf="item.calories">🔥 {{ item.calories }} cal</span>
+            </div>
+          </div>
+
+          <div class="item-right">
+            <img *ngIf="item.imageUrl" [src]="item.imageUrl" [alt]="item.name" class="item-image">
+
+            <div class="item-action" *ngIf="item.isAvailable; else unavailable">
+              <div *ngIf="!cartQty[item.itemId]" class="add-btn-wrapper">
+                <button class="btn btn-primary btn-sm add-btn" (click)="addToCart(item)">+ Add</button>
+              </div>
+              <div *ngIf="cartQty[item.itemId]" class="qty-counter">
+                <button (click)="removeFromCart(item)">−</button>
+                <span>{{ cartQty[item.itemId] }}</span>
+                <button (click)="addToCart(item)">+</button>
+              </div>
+            </div>
+
+            <ng-template #unavailable>
+              <span class="badge badge-neutral" style="font-size:.75rem">Out of stock</span>
+            </ng-template>
+          </div>
+        </div>
+
+        <div *ngIf="!filteredItems.length" class="empty-state">
+          <div class="empty-icon">🔍</div>
+          <div class="empty-title">No items found</div>
+          <div class="empty-desc">Try a different search or category.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── REVIEWS TAB ── -->
+    <div *ngIf="activeTab==='reviews'" class="reviews-panel">
+      <div *ngIf="reviews.length" class="reviews-summary">
+        <div class="avg-rating-big">
+          <span class="avg-num">{{ restaurant.avgRating | number:'1.1-1' }}</span>
+          <div>
+            <div class="star-rating">
+              <span *ngFor="let s of getRatingStars(restaurant.avgRating)" [class.star]="s" [class.star-empty]="!s">★</span>
+            </div>
+            <span class="text-sm text-muted">{{ reviews.length }} reviews</span>
+          </div>
+        </div>
+      </div>
+
+      <div *ngFor="let r of reviews" class="review-card animate-fadeInUp">
+        <div class="review-header">
+          <div class="reviewer-avatar">{{ r.customerName?.charAt(0) || '?' }}</div>
+          <div>
+            <div class="reviewer-name">{{ r.customerName || 'Customer' }}</div>
+            <div class="review-date text-xs text-muted">{{ r.reviewDate | date:'mediumDate' }}</div>
+          </div>
+          <div class="review-stars">
+            <span *ngFor="let s of getRatingStars(r.foodRating)" [class.star]="s" [class.star-empty]="!s" style="color:#FFA726">★</span>
+          </div>
+        </div>
+        <p class="review-comment">{{ r.comment || 'Great food and fast delivery!' }}</p>
+      </div>
+
+      <div *ngIf="!reviews.length" class="empty-state">
+        <div class="empty-icon">💬</div>
+        <div class="empty-title">No reviews yet</div>
+        <div class="empty-desc">Be the first to review this restaurant!</div>
+      </div>
+    </div>
+
+    <!-- ── INFO TAB ── -->
+    <div *ngIf="activeTab==='info'" class="info-panel">
+      <div class="info-grid">
+        <div class="info-item"><span class="info-icon">📍</span><div><strong>Address</strong><p>{{ restaurant.address }}, {{ restaurant.city }}</p></div></div>
+        <div class="info-item"><span class="info-icon">📞</span><div><strong>Phone</strong><p>{{ restaurant.phone || 'Not available' }}</p></div></div>
+        <div class="info-item"><span class="info-icon">🍽️</span><div><strong>Cuisine</strong><p>{{ restaurant.cuisine }}</p></div></div>
+        <div class="info-item"><span class="info-icon">⏱️</span><div><strong>Delivery Time</strong><p>{{ restaurant.estimatedDeliveryMin }} minutes</p></div></div>
+        <div class="info-item"><span class="info-icon">💰</span><div><strong>Min Order</strong><p>₹{{ restaurant.minOrderAmount }}</p></div></div>
+        <div class="info-item"><span class="info-icon">👥</span><div><strong>Cost for Two</strong><p>₹{{ restaurant.costForTwo ?? restaurant.minOrderAmount }}</p></div></div>
+        <div class="info-item"><span class="info-icon">📏</span><div><strong>Delivery Radius</strong><p>{{ restaurant.deliveryRadius }} km</p></div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: Cart Sidebar -->
+  <div class="cart-sidebar" *ngIf="auth.isCustomer || !auth.isLoggedIn">
+    <div class="cart-sidebar-card">
+      <h3 class="cart-sidebar-title">🛒 Your Order</h3>
+
+      <ng-container *ngIf="cart && cart.items.length; else emptyCart">
+        <div class="cart-items-list">
+          <div *ngFor="let item of cart.items" class="cart-sidebar-item">
+            <span class="cs-item-name">{{ item.name || ('Item #' + item.menuItemId) }}</span>
+            <span class="cs-item-qty">× {{ item.quantity }}</span>
+            <span class="cs-item-price">₹{{ item.price * item.quantity }}</span>
+          </div>
+        </div>
+
+        <div class="cart-total-row">
+          <span>Subtotal</span>
+          <span class="price">₹{{ cart.totalPrice }}</span>
+        </div>
+
+        <a routerLink="/cart" class="btn btn-primary w-full" style="margin-top:16px;text-align:center;display:block">
+          View Cart & Checkout →
+        </a>
+      </ng-container>
+
+      <ng-template #emptyCart>
+        <div class="empty-cart-msg">
+          <span style="font-size:2.5rem">🛒</span>
+          <p>Add items to get started!</p>
+        </div>
+        <div class="min-order-hint" *ngIf="restaurant.costForTwo != null">
+          <span>📝</span> Cost for two: ₹{{ restaurant.costForTwo }}
+        </div>
+      </ng-template>
+    </div>
+  </div>
+
+</div>
+</ng-container>

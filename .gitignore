@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Angular build and cache output
+dist/
+.angular/cache/
+coverage/
+tmp/
+out/
+.cache/
+.parcel-cache/
+*.tsbuildinfo
+
+# Local environment files
+.env
+.env.*
+!.env.example
+.env.local
+.env.*.local
+*.local
+src/assets/env.js
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

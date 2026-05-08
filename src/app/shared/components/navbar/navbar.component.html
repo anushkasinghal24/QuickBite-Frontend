@@ -1,0 +1,117 @@
+<nav class="navbar" [class.scrolled]="isScrolled">
+  <div class="container navbar-inner">
+
+    <!-- Logo -->
+    <a routerLink="/home" class="nav-logo" (click)="closeMobile()">
+      <span class="logo-icon">🍕</span>
+      <span class="logo-text">Quick<span class="gradient-text">Bite</span></span>
+    </a>
+
+    <!-- Desktop Links -->
+    <div class="nav-links hide-mobile">
+      <a routerLink="/home"        routerLinkActive="active" class="nav-link">Home</a>
+      <a routerLink="/restaurants" routerLinkActive="active" class="nav-link">Restaurants</a>
+      <a *ngIf="auth.isLoggedIn && auth.isCustomer" routerLink="/orders" routerLinkActive="active" class="nav-link">Orders</a>
+      <a *ngIf="auth.isOwner"  routerLink="/owner"  routerLinkActive="active" class="nav-link">Dashboard</a>
+      <a *ngIf="auth.isAgent"  routerLink="/agent"  routerLinkActive="active" class="nav-link">Deliveries</a>
+      <a *ngIf="auth.isAdmin"  routerLink="/admin"  routerLinkActive="active" class="nav-link">Admin</a>
+    </div>
+
+    <!-- Right Actions -->
+    <div class="nav-actions">
+
+      <!-- Theme Toggle -->
+      <button class="nav-icon-btn" (click)="toggleTheme()" title="Toggle theme">
+        <span>{{ theme.isDarkMode() ? '☀️' : '🌙' }}</span>
+      </button>
+
+      <ng-container *ngIf="auth.isLoggedIn; else guestActions">
+        <!-- Notifications -->
+        <a routerLink="/notifications" class="nav-icon-btn icon-rel hide-mobile">
+          <span>🔔</span>
+          <span class="notif-badge" *ngIf="unreadNotifs > 0">{{ unreadNotifs > 9 ? '9+' : unreadNotifs }}</span>
+        </a>
+
+        <!-- Cart (customers only) -->
+        <a *ngIf="auth.isCustomer" routerLink="/cart" class="nav-icon-btn icon-rel">
+          <span>🛒</span>
+          <span class="notif-badge" *ngIf="cartCount > 0">{{ cartCount }}</span>
+        </a>
+
+        <!-- User Menu -->
+        <div class="user-menu-wrapper">
+          <button class="user-avatar-btn" [title]="user?.fullName || 'Profile'">
+            <img *ngIf="user?.profilePicUrl; else initials"
+                 [src]="user!.profilePicUrl" [alt]="user!.fullName" class="avatar-img">
+            <ng-template #initials>
+              <span class="avatar-initials">{{ user?.fullName?.charAt(0)?.toUpperCase() }}</span>
+            </ng-template>
+          </button>
+
+          <div class="user-dropdown">
+            <div class="dropdown-header">
+              <strong>{{ user?.fullName }}</strong>
+              <span class="badge badge-brand">{{ user?.role }}</span>
+            </div>
+            <div class="divider"></div>
+            <a [routerLink]="dashboardRoute" class="dropdown-item">
+              <span>⚙️</span> Dashboard
+            </a>
+            <a routerLink="/profile" class="dropdown-item">
+              <span>👤</span> Profile
+            </a>
+            <a *ngIf="auth.isCustomer" routerLink="/wallet" class="dropdown-item">
+              <span>💳</span> Wallet
+            </a>
+            <a routerLink="/notifications" class="dropdown-item">
+              <span>🔔</span> Notifications
+              <span class="badge badge-brand" *ngIf="unreadNotifs > 0">{{ unreadNotifs }}</span>
+            </a>
+            <div class="divider"></div>
+            <button class="dropdown-item text-error" (click)="logout()">
+              <span>🚪</span> Sign Out
+            </button>
+          </div>
+        </div>
+
+      </ng-container>
+
+      <!-- Guest Actions -->
+      <ng-template #guestActions>
+        <a routerLink="/login"    class="btn btn-ghost btn-sm hide-mobile">Sign In</a>
+        <a routerLink="/register" class="btn btn-primary btn-sm">Get Started</a>
+      </ng-template>
+
+      <!-- Mobile Hamburger -->
+      <button class="hamburger" (click)="toggleMobile()" [class.open]="mobileMenuOpen">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- Mobile Menu -->
+<div class="mobile-menu" [class.open]="mobileMenuOpen">
+  <div class="mobile-nav-links">
+    <a routerLink="/home"        (click)="closeMobile()" class="mobile-nav-link">🏠 Home</a>
+    <a routerLink="/restaurants" (click)="closeMobile()" class="mobile-nav-link">🍽️ Restaurants</a>
+    <ng-container *ngIf="auth.isLoggedIn">
+      <a *ngIf="auth.isCustomer" routerLink="/orders"        (click)="closeMobile()" class="mobile-nav-link">📦 My Orders</a>
+      <a *ngIf="auth.isCustomer" routerLink="/cart"          (click)="closeMobile()" class="mobile-nav-link">🛒 Cart <span class="badge badge-brand" *ngIf="cartCount">{{ cartCount }}</span></a>
+      <a *ngIf="auth.isCustomer" routerLink="/wallet"        (click)="closeMobile()" class="mobile-nav-link">💳 Wallet</a>
+      <a *ngIf="auth.isOwner"    routerLink="/owner"         (click)="closeMobile()" class="mobile-nav-link">🏪 Dashboard</a>
+      <a *ngIf="auth.isAgent"    routerLink="/agent"         (click)="closeMobile()" class="mobile-nav-link">🚴 Deliveries</a>
+      <a *ngIf="auth.isAdmin"    routerLink="/admin"         (click)="closeMobile()" class="mobile-nav-link">🛡️ Admin</a>
+      <a routerLink="/notifications" (click)="closeMobile()" class="mobile-nav-link">🔔 Notifications</a>
+      <a routerLink="/profile"       (click)="closeMobile()" class="mobile-nav-link">👤 Profile</a>
+      <button class="mobile-nav-link text-error" (click)="logout()">🚪 Sign Out</button>
+    </ng-container>
+    <ng-container *ngIf="!auth.isLoggedIn">
+      <a routerLink="/login"    (click)="closeMobile()" class="mobile-nav-link">🔑 Sign In</a>
+      <a routerLink="/register" (click)="closeMobile()" class="mobile-nav-link">✨ Register</a>
+    </ng-container>
+  </div>
+</div>
+
+<!-- Mobile Overlay -->
+<div *ngIf="mobileMenuOpen" class="mobile-overlay" (click)="closeMobile()"></div>
