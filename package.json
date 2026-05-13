@@ -1,0 +1,53 @@
+{
+  "name": "quickbite-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "ng": "ng",
+    "prestart": "node scripts/generate-runtime-env.js",
+    "start": "ng serve --proxy-config proxy.conf.json",
+    "prebuild": "node scripts/generate-runtime-env.js",
+    "build": "ng build",
+    "build:prod": "ng build --configuration production",
+    "prewatch": "node scripts/generate-runtime-env.js",
+    "watch": "ng build --watch --configuration development",
+    "pretest": "node scripts/generate-runtime-env.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:ci": "jest --runInBand --coverage"
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/animations": "^17.3.0",
+    "@angular/common": "^17.3.0",
+    "@angular/compiler": "^17.3.0",
+    "@angular/core": "^17.3.0",
+    "@angular/forms": "^17.3.0",
+    "@angular/platform-browser": "^17.3.0",
+    "@angular/platform-browser-dynamic": "^17.3.0",
+    "@angular/router": "^17.3.0",
+    "@angular/cdk": "^17.3.0",
+    "@angular/material": "^17.3.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.14.3",
+    "@stomp/stompjs": "^7.0.0",
+    "sockjs-client": "^1.6.1",
+    "chart.js": "^4.4.2",
+    "ng2-charts": "^5.0.4",
+    "leaflet": "^1.9.4",
+    "@types/leaflet": "^1.9.8",
+    "swiper": "^11.1.0",
+    "ngx-toastr": "^18.0.0",
+    "animate.css": "^4.1.1"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^17.3.0",
+    "@angular/cli": "^17.3.0",
+    "@angular/compiler-cli": "^17.3.0",
+    "@types/jest": "^29.5.14",
+    "@types/sockjs-client": "^1.5.4",
+    "jest": "^29.7.0",
+    "jest-preset-angular": "^14.4.0",
+    "typescript": "~5.4.2"
+  }
+}

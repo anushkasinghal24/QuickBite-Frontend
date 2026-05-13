@@ -1,0 +1,9 @@
+@import '../login/login.component.scss';
+
+.terms-note {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  a { color: var(--brand-primary); text-decoration: none; &:hover { text-decoration: underline; } }
+}
