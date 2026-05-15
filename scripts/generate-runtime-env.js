@@ -46,6 +46,16 @@ function buildRuntimeObject(env) {
   };
 }
 
+function pickRuntimeEnv(source) {
+  return {
+    API_URL: source.API_URL,
+    WS_URL: source.WS_URL,
+    AUTH_URL: source.AUTH_URL,
+    GOOGLE_OAUTH_URL: source.GOOGLE_OAUTH_URL,
+    GITHUB_OAUTH_URL: source.GITHUB_OAUTH_URL
+  };
+}
+
 let env = {};
 let sourceLabel = 'defaults';
 
@@ -60,7 +70,10 @@ if (fs.existsSync(envPath)) {
   console.warn(`No .env file found at ${envPath}; using built-in defaults.`);
 }
 
-const runtimeEnv = buildRuntimeObject(env);
+const runtimeEnv = buildRuntimeObject({
+  ...env,
+  ...pickRuntimeEnv(process.env)
+});
 const output = `window.__QB_ENV__ = ${JSON.stringify(runtimeEnv, null, 2)};\n`;
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
