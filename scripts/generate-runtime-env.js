@@ -3,6 +3,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const envPath = path.join(root, '.env');
+const exampleEnvPath = path.join(root, '.env.example');
 const outputPath = path.join(root, 'src', 'assets', 'env.js');
 
 function parseEnv(text) {
@@ -45,14 +46,23 @@ function buildRuntimeObject(env) {
   };
 }
 
-if (!fs.existsSync(envPath)) {
-  throw new Error(`Missing .env file at ${envPath}`);
+let env = {};
+let sourceLabel = 'defaults';
+
+if (fs.existsSync(envPath)) {
+  env = parseEnv(fs.readFileSync(envPath, 'utf8'));
+  sourceLabel = '.env';
+} else if (fs.existsSync(exampleEnvPath)) {
+  env = parseEnv(fs.readFileSync(exampleEnvPath, 'utf8'));
+  sourceLabel = '.env.example';
+  console.warn(`No .env file found at ${envPath}; using .env.example values and built-in defaults.`);
+} else {
+  console.warn(`No .env file found at ${envPath}; using built-in defaults.`);
 }
 
-const env = parseEnv(fs.readFileSync(envPath, 'utf8'));
 const runtimeEnv = buildRuntimeObject(env);
 const output = `window.__QB_ENV__ = ${JSON.stringify(runtimeEnv, null, 2)};\n`;
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, output, 'utf8');
-console.log(`Generated ${path.relative(root, outputPath)} from .env`);
+console.log(`Generated ${path.relative(root, outputPath)} from ${sourceLabel}`);
