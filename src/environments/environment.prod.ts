@@ -1,12 +1,18 @@
-import { getRuntimeEnvironment } from './runtime-config';
-
-const runtime = getRuntimeEnvironment();
+const isLocalhost =
+  typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
 export const environment = {
   production: true,
-  apiUrl: runtime.API_URL ?? 'http://localhost:8080/api/v1',
-  wsUrl: runtime.WS_URL ?? 'http://localhost:8080/ws',
-  authUrl: runtime.AUTH_URL ?? 'http://localhost:8081',
-  googleOAuthUrl: runtime.GOOGLE_OAUTH_URL ?? '/oauth2/authorization/google',
-  githubOAuthUrl: runtime.GITHUB_OAUTH_URL ?? '/oauth2/authorization/github'
+  apiUrl: isLocalhost
+    ? 'http://localhost:8080/api/v1'
+    : 'https://quickbite-api-gateway-3pmg.onrender.com/api/v1',
+  wsUrl: isLocalhost
+    ? 'http://localhost:8080/ws'
+    : 'https://quickbite-api-gateway-3pmg.onrender.com/ws',
+  authUrl: isLocalhost
+    ? 'http://localhost:8081'
+    : 'https://quickbite-auth-service-xx4w.onrender.com',
+  googleOAuthUrl: '/oauth2/authorization/google',
+  githubOAuthUrl: '/oauth2/authorization/github'
 };
